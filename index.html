@@ -8,18 +8,20 @@
         * { box-sizing: border-box; }
         body { margin: 0; padding: 0; background: #121212; color: #fff; font-family: -apple-system, sans-serif; display: flex; flex-direction: column; height: 100vh; }
         
-        .header { background: #1e1e1e; padding: 12px; text-align: center; font-weight: bold; font-size: 15px; border-bottom: 2px solid #333; }
+        .header { background: #1e1e1e; padding: 10px; text-align: center; font-weight: bold; font-size: 15px; border-bottom: 2px solid #333; }
         
         .map-container { flex: 1; background: #1a1a1a; display: flex; justify-content: center; align-items: center; padding: 10px; position: relative; }
-        svg { width: 100%; height: 100%; max-height: 70vh; }
+        svg { width: 100%; height: 100%; max-height: 65vh; }
         
         .panel { background: #000; padding: 15px; border-top: 2px solid #333; text-align: center; }
         .km-val { font-size: 26px; font-weight: bold; color: #00ff66; margin-bottom: 4px; }
-        .ente-val { font-size: 14px; color: #ffcc00; margin-bottom: 8px; }
-        .status-val { font-size: 12px; color: #aaa; margin-bottom: 12px; font-style: italic; }
+        .ente-val { font-size: 14px; color: #ffcc00; margin-bottom: 6px; }
+        .status-val { font-size: 12px; color: #aaa; margin-bottom: 12px; font-style: italic; min-height: 18px; }
         
-        .btn-gps { background: #008000; color: white; border: none; padding: 15px; border-radius: 8px; font-size: 16px; font-weight: bold; width: 100%; cursor: pointer; }
+        .btn-group { display: flex; gap: 8px; }
+        .btn-gps { flex: 2; background: #008000; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; }
         .btn-gps.active { background: #cc0000; }
+        .btn-test { flex: 1; background: #444; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
@@ -35,7 +37,7 @@
                 220,120 235,90 245,60 250,30" 
                 fill="none" stroke="#ff3333" stroke-width="4" stroke-linecap="round" />
 
-            <!-- Stazioni principale -->
+            <!-- Stazioni -->
             <circle cx="60" cy="570" r="7" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('AROSIO (RAR)', '31.049')" />
             <text x="75" y="575" fill="#fff" font-size="12" font-weight="bold">Arosio</text>
 
@@ -60,17 +62,18 @@
 
             <circle cx="250" cy="30" r="8" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('ASSO', '50.412')" />
             <text x="200" y="35" fill="#fff" font-size="12" font-weight="bold">ASSO</text>
-
-            <!-- Indicatore Utente GPS -->
-            <circle id="user-dot" cx="-50" cy="-50" r="9" fill="#00ffff" stroke="#ffffff" stroke-width="2" />
         </svg>
     </div>
 
     <div class="panel">
         <div id="km-display" class="km-val">Km --.---</div>
-        <div id="ente-display" class="ente-val">GPS Disattivato</div>
-        <div id="status-display" class="status-val">Premi il pulsante sotto per avviare</div>
-        <button id="gps-btn" class="btn-gps" onclick="toggleGPS()">📍 ATTIVA TRACCIAMENTO GPS</button>
+        <div id="ente-display" class="ente-val">GPS Inattivo</div>
+        <div id="status-display" class="status-val">Pronto per il tracciamento</div>
+        
+        <div class="btn-group">
+            <button id="gps-btn" class="btn-gps" onclick="startGPS()">📍 ATTIVA GPS</button>
+            <button class="btn-test" onclick="simulaPosizione()">🧪 TEST</button>
+        </div>
     </div>
 
     <script>
@@ -87,81 +90,80 @@
             { km: 31.049, ente: "AROSIO (RAR)", lat: 45.70761, lon: 9.18932 }
         ];
 
-        let watchId = null;
+        let tracking = false;
 
         function showInfo(ente, km) {
             document.getElementById('km-display').innerText = 'Km ' + km;
             document.getElementById('ente-display').innerText = ente;
         }
 
-        function toggleGPS() {
+        function updatePosition(lat, lon, accuracy) {
+            document.getElementById('status-display').innerText = `Segnale GPS ricevuto (Precisione: ±${Math.round(accuracy)}m)`;
+
+            let piuVicino = null;
+            let distMinima = Infinity;
+
+            puntiNoti.forEach(p => {
+                // Calcolo distanza approssimata
+                const d = Math.hypot(p.lat - lat, p.lon - lon);
+                if (d < distMinima) {
+                    distMinima = d;
+                    piuVicino = p;
+                }
+            });
+
+            if (piuVicino) {
+                document.getElementById('km-display').innerText = `Km ${piuVicino.km.toFixed(3)}`;
+                document.getElementById('ente-display').innerText = `Vicino a: ${piuVicino.ente}`;
+            }
+        }
+
+        function startGPS() {
             const btn = document.getElementById('gps-btn');
             const status = document.getElementById('status-display');
 
-            if (watchId === null) {
+            if (!tracking) {
                 if (!("geolocation" in navigator)) {
-                    status.innerText = "Errore: Geolocalizzazione non supportata dal browser.";
+                    alert("Geolocalizzazione non supportata dal tuo browser.");
                     return;
                 }
 
-                status.innerText = "Ricerca segnale GPS in corso...";
+                status.innerText = "Interrogazione sensore GPS in corso...";
                 btn.innerText = "🛑 FERMA GPS";
                 btn.classList.add('active');
+                tracking = true;
 
-                watchId = navigator.geolocation.watchPosition(
-                    position => {
-                        const lat = position.coords.latitude;
-                        const lon = position.coords.longitude;
-                        const acc = Math.round(position.coords.accuracy);
-
-                        status.innerText = `GPS Attivo (Accuratezza: ±${acc}m)`;
-
-                        // Trova l'ente/stazione più vicina
-                        let piuVicino = null;
-                        let distMinima = Infinity;
-
-                        puntiNoti.forEach(p => {
-                            // Calcolo distanza euclidea approssimata per vicinanza
-                            const d = Math.hypot(p.lat - lat, p.lon - lon);
-                            if (d < distMinima) {
-                                distMinima = d;
-                                piuVicino = p;
-                            }
-                        });
-
-                        if (piuVicino) {
-                            document.getElementById('km-display').innerText = `Km ${piuVicino.km.toFixed(3)}`;
-                            document.getElementById('ente-display').innerText = `Prossimità: ${piuVicino.ente}`;
-                        }
+                // Forziamo il risveglio dell'hardware con una singola chiamata standard
+                navigator.geolocation.getCurrentPosition(
+                    pos => {
+                        updatePosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
                     },
-                    error => {
-                        let errMsg = "Errore GPS sconosciuto.";
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                errMsg = "Permesso negato: abilita la posizione nelle impostazioni del browser.";
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errMsg = "Segnale GPS non disponibile. Vai all'aperto.";
-                                break;
-                            case error.TIMEOUT:
-                                errMsg = "Timeout richiesta GPS. Riprova tra poco.";
-                                break;
-                        }
-                        status.innerText = errMsg;
+                    err => {
+                        let msg = "Errore GPS: ";
+                        if (err.code === 1) msg += "Permesso negato nel browser o nelle impostazioni del telefono.";
+                        else if (err.code === 2) msg += "Posizione non disponibile (Nessun segnale satellitare).";
+                        else if (err.code === 3) msg += "Tempo di risposta scaduto.";
+                        status.innerText = msg;
+                        alert(msg);
+                        btn.innerText = "📍 ATTIVA GPS";
+                        btn.classList.remove('active');
+                        tracking = false;
                     },
-                    {
-                        enableHighAccuracy: true,
-                        timeout: 15000,
-                        maximumAge: 0
-                    }
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 );
+
             } else {
-                navigator.geolocation.clearWatch(watchId);
-                watchId = null;
-                btn.innerText = "📍 ATTIVA TRACCIAMENTO GPS";
+                tracking = false;
+                btn.innerText = "📍 ATTIVA GPS";
                 btn.classList.remove('active');
                 status.innerText = "GPS Disattivato";
             }
+        }
+
+        function simulaPosizione() {
+            // Simula una posizione vicino alla stazione di Erba
+            updatePosition(45.80200, 9.25500, 5);
+            document.getElementById('status-display').innerText = "Modalità Test Simulata (Stazione Erba)";
         }
     </script>
 </body>
