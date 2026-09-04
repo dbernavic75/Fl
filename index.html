@@ -2,22 +2,24 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tracciato Linea Asso</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Monitor Tracciato Asso</title>
     <style>
         * { box-sizing: border-box; }
-        body { margin: 0; padding: 0; background: #121212; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+        body { margin: 0; padding: 0; background: #121212; color: #fff; font-family: -apple-system, sans-serif; display: flex; flex-direction: column; height: 100vh; }
         
-        .header { background: #1e1e1e; padding: 10px; text-align: center; font-weight: bold; font-size: 15px; border-bottom: 2px solid #333; }
+        .header { background: #1e1e1e; padding: 12px; text-align: center; font-weight: bold; font-size: 15px; border-bottom: 2px solid #333; }
         
-        .map-container { flex: 1; background: #1a1a1a; display: flex; justify-content: center; align-items: center; padding: 10px; }
+        .map-container { flex: 1; background: #1a1a1a; display: flex; justify-content: center; align-items: center; padding: 10px; position: relative; }
         svg { width: 100%; height: 100%; max-height: 70vh; }
         
         .panel { background: #000; padding: 15px; border-top: 2px solid #333; text-align: center; }
         .km-val { font-size: 26px; font-weight: bold; color: #00ff66; margin-bottom: 4px; }
-        .ente-val { font-size: 14px; color: #ffcc00; margin-bottom: 10px; }
+        .ente-val { font-size: 14px; color: #ffcc00; margin-bottom: 8px; }
+        .status-val { font-size: 12px; color: #aaa; margin-bottom: 12px; font-style: italic; }
         
-        .btn-gps { background: #008000; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 15px; font-weight: bold; width: 100%; cursor: pointer; }
+        .btn-gps { background: #008000; color: white; border: none; padding: 15px; border-radius: 8px; font-size: 16px; font-weight: bold; width: 100%; cursor: pointer; }
+        .btn-gps.active { background: #cc0000; }
     </style>
 </head>
 <body>
@@ -25,70 +27,141 @@
     <div class="header">TRACCIATO FERROVIARIO AROSIO - ASSO</div>
 
     <div class="map-container">
-        <!-- Disegno Vettoriale SVG Nativo -->
         <svg viewBox="0 0 300 600" preserveAspectRatio="xMidYMid meet">
-            <!-- Linea dei binari -->
+            <!-- Linea Binari -->
             <polyline points="
                 60,570 66,540 70,510 75,480 82,450 88,420 95,390 102,360 
                 110,330 118,300 130,270 145,240 160,210 180,180 200,150 
                 220,120 235,90 245,60 250,30" 
                 fill="none" stroke="#ff3333" stroke-width="4" stroke-linecap="round" />
 
-            <!-- Stazioni e Punti Noti -->
-            <!-- Arosio -->
+            <!-- Stazioni principale -->
             <circle cx="60" cy="570" r="7" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('AROSIO (RAR)', '31.049')" />
             <text x="75" y="575" fill="#fff" font-size="12" font-weight="bold">Arosio</text>
 
-            <!-- Inverigo -->
             <circle cx="95" cy="390" r="7" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('INVERIGO', '34.011')" />
             <text x="110" y="395" fill="#fff" font-size="12" font-weight="bold">Inverigo</text>
 
-            <!-- Lambrugo-Lurago -->
             <circle cx="118" cy="300" r="7" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('Lambrugo - Lurago', '36.905')" />
             <text x="133" y="305" fill="#fff" font-size="12" font-weight="bold">Lambrugo</text>
 
-            <!-- Merone -->
             <circle cx="130" cy="270" r="7" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('MERONE', '39.336')" />
             <text x="145" y="275" fill="#fff" font-size="12" font-weight="bold">Merone</text>
 
-            <!-- Erba -->
             <circle cx="180" cy="180" r="7" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('ERBA', '43.332')" />
             <text x="195" y="185" fill="#fff" font-size="12" font-weight="bold">Erba</text>
 
-            <!-- Lezza-Carpesino -->
             <circle cx="200" cy="150" r="5" fill="#00ff00" stroke="#fff" stroke-width="1.5" onclick="showInfo('Lezza - Carpesino', '44.336')" />
-            
-            <!-- Ponte Lambro -->
             <circle cx="220" cy="120" r="5" fill="#00ff00" stroke="#fff" stroke-width="1.5" onclick="showInfo('Ponte Lambro', '45.188')" />
-
-            <!-- Caslino d'Erba -->
             <circle cx="235" cy="90" r="5" fill="#00ff00" stroke="#fff" stroke-width="1.5" onclick="showInfo('Caslino d\'Erba', '46.112')" />
 
-            <!-- Canzo -->
             <circle cx="245" cy="60" r="7" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('Canzo', '49.679')" />
             <text x="195" y="65" fill="#fff" font-size="12" font-weight="bold">Canzo</text>
 
-            <!-- Asso -->
             <circle cx="250" cy="30" r="8" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('ASSO', '50.412')" />
             <text x="200" y="35" fill="#fff" font-size="12" font-weight="bold">ASSO</text>
 
-            <!-- Indicatori PL / Punti intermedi (Arancioni) -->
-            <circle cx="75" cy="480" r="4" fill="#ffaa00" onclick="showInfo('PL km 32.948', '32.948')" />
-            <circle cx="110" cy="330" r="4" fill="#ffaa00" onclick="showInfo('PL km 35.409', '35.409')" />
-            <circle cx="160" cy="210" r="4" fill="#ffaa00" onclick="showInfo('PLA km 41.469', '41.469')" />
+            <!-- Indicatore Utente GPS -->
+            <circle id="user-dot" cx="-50" cy="-50" r="9" fill="#00ffff" stroke="#ffffff" stroke-width="2" />
         </svg>
     </div>
 
     <div class="panel">
         <div id="km-display" class="km-val">Km --.---</div>
-        <div id="ente-display" class="ente-val">Tocca una stazione o un punto sulla linea</div>
-        <button class="btn-gps" onclick="alert('Quando sarai in tratta, questo pulsante rileverà la posizione esatta.')">📍 POSIZIONE GPS</button>
+        <div id="ente-display" class="ente-val">GPS Disattivato</div>
+        <div id="status-display" class="status-val">Premi il pulsante sotto per avviare</div>
+        <button id="gps-btn" class="btn-gps" onclick="toggleGPS()">📍 ATTIVA TRACCIAMENTO GPS</button>
     </div>
 
     <script>
+        const puntiNoti = [
+            { km: 50.412, ente: "ASSO", lat: 45.86012, lon: 9.26781 },
+            { km: 49.679, ente: "Canzo", lat: 45.85461, lon: 9.26930 },
+            { km: 46.112, ente: "Caslino d'Erba", lat: 45.82500, lon: 9.26800 },
+            { km: 45.188, ente: "Ponte Lambro", lat: 45.81700, lon: 9.26500 },
+            { km: 44.336, ente: "Lezza - Carpesino", lat: 45.81000, lon: 9.26150 },
+            { km: 43.332, ente: "ERBA", lat: 45.80200, lon: 9.25500 },
+            { km: 39.336, ente: "MERONE", lat: 45.77000, lon: 9.23900 },
+            { km: 36.905, ente: "Lambrugo - Lurago", lat: 45.75050, lon: 9.23050 },
+            { km: 34.011, ente: "INVERIGO", lat: 45.72960, lon: 9.21160 },
+            { km: 31.049, ente: "AROSIO (RAR)", lat: 45.70761, lon: 9.18932 }
+        ];
+
+        let watchId = null;
+
         function showInfo(ente, km) {
             document.getElementById('km-display').innerText = 'Km ' + km;
             document.getElementById('ente-display').innerText = ente;
+        }
+
+        function toggleGPS() {
+            const btn = document.getElementById('gps-btn');
+            const status = document.getElementById('status-display');
+
+            if (watchId === null) {
+                if (!("geolocation" in navigator)) {
+                    status.innerText = "Errore: Geolocalizzazione non supportata dal browser.";
+                    return;
+                }
+
+                status.innerText = "Ricerca segnale GPS in corso...";
+                btn.innerText = "🛑 FERMA GPS";
+                btn.classList.add('active');
+
+                watchId = navigator.geolocation.watchPosition(
+                    position => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        const acc = Math.round(position.coords.accuracy);
+
+                        status.innerText = `GPS Attivo (Accuratezza: ±${acc}m)`;
+
+                        // Trova l'ente/stazione più vicina
+                        let piuVicino = null;
+                        let distMinima = Infinity;
+
+                        puntiNoti.forEach(p => {
+                            // Calcolo distanza euclidea approssimata per vicinanza
+                            const d = Math.hypot(p.lat - lat, p.lon - lon);
+                            if (d < distMinima) {
+                                distMinima = d;
+                                piuVicino = p;
+                            }
+                        });
+
+                        if (piuVicino) {
+                            document.getElementById('km-display').innerText = `Km ${piuVicino.km.toFixed(3)}`;
+                            document.getElementById('ente-display').innerText = `Prossimità: ${piuVicino.ente}`;
+                        }
+                    },
+                    error => {
+                        let errMsg = "Errore GPS sconosciuto.";
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errMsg = "Permesso negato: abilita la posizione nelle impostazioni del browser.";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errMsg = "Segnale GPS non disponibile. Vai all'aperto.";
+                                break;
+                            case error.TIMEOUT:
+                                errMsg = "Timeout richiesta GPS. Riprova tra poco.";
+                                break;
+                        }
+                        status.innerText = errMsg;
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 15000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+                btn.innerText = "📍 ATTIVA TRACCIAMENTO GPS";
+                btn.classList.remove('active');
+                status.innerText = "GPS Disattivato";
+            }
         }
     </script>
 </body>
