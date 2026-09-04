@@ -11,11 +11,16 @@
         .header { background: #1e1e1e; padding: 10px; text-align: center; font-weight: bold; font-size: 15px; border-bottom: 2px solid #333; }
         
         .map-container { flex: 1; background: #1a1a1a; display: flex; justify-content: center; align-items: center; padding: 10px; position: relative; }
-        svg { width: 100%; height: 100%; max-height: 65vh; }
+        svg { width: 100%; height: 100%; max-height: 62vh; }
         
         .panel { background: #000; padding: 15px; border-top: 2px solid #333; text-align: center; }
-        .km-val { font-size: 26px; font-weight: bold; color: #00ff66; margin-bottom: 4px; }
-        .ente-val { font-size: 14px; color: #ffcc00; margin-bottom: 6px; }
+        
+        /* Contatore Chilometrico Ad Alta Visibilità */
+        .km-box { background: #181818; border: 2px solid #00ff66; border-radius: 10px; padding: 8px; margin-bottom: 8px; }
+        .km-val { font-size: 32px; font-weight: bold; color: #00ff66; font-family: monospace; letter-spacing: 1px; }
+        .km-label { font-size: 11px; color: #888; text-transform: uppercase; margin-top: 2px; }
+        
+        .ente-val { font-size: 15px; color: #ffcc00; margin-bottom: 6px; font-weight: bold; }
         .status-val { font-size: 12px; color: #aaa; margin-bottom: 12px; font-style: italic; min-height: 18px; }
         
         .btn-group { display: flex; gap: 8px; }
@@ -23,9 +28,8 @@
         .btn-gps.active { background: #cc0000; }
         .btn-test { flex: 1; background: #444; color: white; border: none; padding: 14px; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer; }
         
-        /* Animazione per il cursore GPS */
         #user-dot {
-            transition: cx 0.5s ease, cy 0.5s ease;
+            transition: cx 0.2s linear, cy 0.2s linear;
         }
     </style>
 </head>
@@ -42,7 +46,7 @@
                 220,120 235,90 245,60 250,30" 
                 fill="none" stroke="#ff3333" stroke-width="4" stroke-linecap="round" />
 
-            <!-- Stazioni e Punti -->
+            <!-- Stazioni -->
             <circle cx="60" cy="570" r="7" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('AROSIO (RAR)', '31.049')" />
             <text x="75" y="575" fill="#fff" font-size="12" font-weight="bold">Arosio</text>
 
@@ -68,72 +72,113 @@
             <circle cx="250" cy="30" r="8" fill="#00ff00" stroke="#fff" stroke-width="2" onclick="showInfo('ASSO', '50.412')" />
             <text x="200" y="35" fill="#fff" font-size="12" font-weight="bold">ASSO</text>
 
-            <!-- Cursore Posizione Utente / Treno (Nascosto di default a x=-50) -->
+            <!-- Cursore Posizione Treno -->
             <circle id="user-dot" cx="-50" cy="-50" r="9" fill="#00ffff" stroke="#ffffff" stroke-width="2" />
         </svg>
     </div>
 
     <div class="panel">
-        <div id="km-display" class="km-val">Km --.---</div>
+        <div class="km-box">
+            <div id="km-display" class="km-val">Km --.---</div>
+            <div class="km-label">Progressiva Chilometrica Reale</div>
+        </div>
         <div id="ente-display" class="ente-val">GPS Inattivo</div>
         <div id="status-display" class="status-val">Pronto per il tracciamento</div>
         
         <div class="btn-group">
             <button id="gps-btn" class="btn-gps" onclick="toggleGPS()">📍 ATTIVA GPS</button>
-            <button class="btn-test" onclick="simulaPosizione()">🧪 TEST</button>
+            <button class="btn-test" onclick="simulaAvanzamento()">🧪 AVANZAMENTO</button>
         </div>
     </div>
 
     <script>
-        const puntiNoti = [
-            { km: 50.412, ente: "ASSO", lat: 45.86012, lon: 9.26781, svgX: 250, svgY: 30 },
-            { km: 49.679, ente: "Canzo", lat: 45.85461, lon: 9.26930, svgX: 245, svgY: 60 },
-            { km: 46.112, ente: "Caslino d'Erba", lat: 45.82500, lon: 9.26800, svgX: 235, svgY: 90 },
-            { km: 45.188, ente: "Ponte Lambro", lat: 45.81700, lon: 9.26500, svgX: 220, svgY: 120 },
-            { km: 44.336, ente: "Lezza - Carpesino", lat: 45.81000, lon: 9.26150, svgX: 200, svgY: 150 },
-            { km: 43.332, ente: "ERBA", lat: 45.80200, lon: 9.25500, svgX: 180, svgY: 180 },
-            { km: 39.336, ente: "MERONE", lat: 45.77000, lon: 9.23900, svgX: 130, svgY: 270 },
-            { km: 36.905, ente: "Lambrugo - Lurago", lat: 45.75050, lon: 9.23050, svgX: 118, svgY: 300 },
+        // Capisaldi con coordinate GPS, progressiva e posizione vettoriale SVG
+        const tratte = [
+            { km: 31.049, ente: "AROSIO (RAR)", lat: 45.70761, lon: 9.18932, svgX: 60, svgY: 570 },
             { km: 34.011, ente: "INVERIGO", lat: 45.72960, lon: 9.21160, svgX: 95, svgY: 390 },
-            { km: 31.049, ente: "AROSIO (RAR)", lat: 45.70761, lon: 9.18932, svgX: 60, svgY: 570 }
+            { km: 36.905, ente: "Lambrugo - Lurago", lat: 45.75050, lon: 9.23050, svgX: 118, svgY: 300 },
+            { km: 39.336, ente: "MERONE", lat: 45.77000, lon: 9.23900, svgX: 130, svgY: 270 },
+            { km: 43.332, ente: "ERBA", lat: 45.80200, lon: 9.25500, svgX: 180, svgY: 180 },
+            { km: 44.336, ente: "Lezza - Carpesino", lat: 45.81000, lon: 9.26150, svgX: 200, svgY: 150 },
+            { km: 45.188, ente: "Ponte Lambro", lat: 45.81700, lon: 9.26500, svgX: 220, svgY: 120 },
+            { km: 46.112, ente: "Caslino d'Erba", lat: 45.82500, lon: 9.26800, svgX: 235, svgY: 90 },
+            { km: 49.679, ente: "Canzo", lat: 45.85461, lon: 9.26930, svgX: 245, svgY: 60 },
+            { km: 50.412, ente: "ASSO", lat: 45.86012, lon: 9.26781, svgX: 250, svgY: 30 }
         ];
 
         let watchId = null;
+        let simInterval = null;
 
         function showInfo(ente, km) {
             document.getElementById('km-display').innerText = 'Km ' + km;
             document.getElementById('ente-display').innerText = ente;
         }
 
-        function updatePosition(lat, lon, accuracy) {
-            document.getElementById('status-display').innerText = `Segnale GPS attivo (Precisione: ±${Math.round(accuracy)}m)`;
+        // Calcolo della distanza geografica in metri tra due punti (Haversine Formula)
+        function getDistanceMeters(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Raggio terrestre in metri
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
 
-            // Trova l'ente/stazione più vicina
-            let piuVicino = null;
-            let distMinima = Infinity;
+        function updateRealtimePosition(lat, lon, accuracy) {
+            document.getElementById('status-display').innerText = `Segnale GPS: Precisione ±${Math.round(accuracy)}m`;
 
-            puntiNoti.forEach(p => {
-                const d = Math.hypot(p.lat - lat, p.lon - lon);
-                if (d < distMinima) {
-                    distMinima = d;
-                    piuVicino = p;
+            // Trova la tratta di binario compresa tra due punti noti
+            let segMin = 0;
+            let distMin = Infinity;
+
+            for (let i = 0; i < tratte.length - 1; i++) {
+                const d1 = getDistanceMeters(lat, lon, tratte[i].lat, tratte[i].lon);
+                const d2 = getDistanceMeters(lat, lon, tratte[i+1].lat, tratte[i+1].lon);
+                const segLen = getDistanceMeters(tratte[i].lat, tratte[i].lon, tratte[i+1].lat, tratte[i+1].lon);
+
+                // Somma delle distanze per capire il segmento più vicino
+                const deviazione = (d1 + d2) - segLen;
+                if (deviazione < distMin) {
+                    distMin = deviazione;
+                    segMin = i;
                 }
-            });
-
-            if (piuVicino) {
-                document.getElementById('km-display').innerText = `Km ${piuVicino.km.toFixed(3)}`;
-                document.getElementById('ente-display').innerText = `Vicino a: ${piuVicino.ente}`;
-
-                // SPOSTA IL PALLINO AZZURRO SUL GRAFICO SVG
-                const userDot = document.getElementById('user-dot');
-                userDot.setAttribute('cx', piuVicino.svgX);
-                userDot.setAttribute('cy', piuVicino.svgY);
             }
+
+            const pA = tratte[segMin];
+            const pB = tratte[segMin + 1];
+
+            // Proiezione del punto sul segmento di tratta
+            const distA = getDistanceMeters(lat, lon, pA.lat, pA.lon);
+            const distB = getDistanceMeters(lat, lon, pB.lat, pB.lon);
+            const distAB = getDistanceMeters(pA.lat, pA.lon, pB.lat, pB.lon);
+
+            // Calcolo della frazione di avanzamento lungo la tratta (0.0 -> 1.0)
+            let ratio = (distA) / (distAB);
+            if (ratio < 0) ratio = 0;
+            if (ratio > 1) ratio = 1;
+
+            // Calcolo della progressiva chilometrica continua (precisione al metro)
+            const kmCalcolato = pA.km + (ratio * (pB.km - pA.km));
+            
+            // Aggiornamento interfaccia numerica
+            document.getElementById('km-display').innerText = `Km ${kmCalcolato.toFixed(3)}`;
+            document.getElementById('ente-display').innerText = `Tratta: ${pA.ente} ➔ ${pB.ente}`;
+
+            // Spostamento del punto azzurro sul grafico SVG
+            const currentSvgX = pA.svgX + ratio * (pB.svgX - pA.svgX);
+            const currentSvgY = pA.svgY + ratio * (pB.svgY - pA.svgY);
+
+            const userDot = document.getElementById('user-dot');
+            userDot.setAttribute('cx', currentSvgX);
+            userDot.setAttribute('cy', currentSvgY);
         }
 
         function toggleGPS() {
             const btn = document.getElementById('gps-btn');
             const status = document.getElementById('status-display');
+
+            if (simInterval) clearInterval(simInterval);
 
             if (watchId === null) {
                 if (!("geolocation" in navigator)) {
@@ -141,23 +186,19 @@
                     return;
                 }
 
-                status.innerText = "Acquisizione segnale satellitare...";
+                status.innerText = "Sintonizzazione antenna GPS...";
                 btn.innerText = "🛑 FERMA GPS";
                 btn.classList.add('active');
 
-                // Tracciamento continuo in tempo reale
+                // Sensore ad alta frequenza
                 watchId = navigator.geolocation.watchPosition(
                     pos => {
-                        updatePosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+                        updateRealtimePosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
                     },
                     err => {
-                        let msg = "Errore GPS: ";
-                        if (err.code === 1) msg += "Permesso negato.";
-                        else if (err.code === 2) msg += "Segnale non disponibile.";
-                        else if (err.code === 3) msg += "Timeout richiesta.";
-                        status.innerText = msg;
+                        status.innerText = "Errore ricezione GPS. Riprova all'aperto.";
                     },
-                    { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 );
 
             } else {
@@ -167,17 +208,29 @@
                 btn.classList.remove('active');
                 status.innerText = "GPS Disattivato";
                 
-                // Nasconde il pallino quando si disattiva
-                const userDot = document.getElementById('user-dot');
-                userDot.setAttribute('cx', -50);
-                userDot.setAttribute('cy', -50);
+                document.getElementById('user-dot').setAttribute('cx', -50);
             }
         }
 
-        function simulaPosizione() {
-            // Simula la posizione alla stazione di Erba
-            updatePosition(45.80200, 9.25500, 5);
-            document.getElementById('status-display').innerText = "Modalità Test Simulata (Stazione Erba)";
+        // Simulazione di prova: fa scorrere il treno da Erba verso Ponte Lambro a velocità costante
+        function simulaAvanzamento() {
+            if (watchId) toggleGPS();
+            if (simInterval) clearInterval(simInterval);
+
+            let simRatio = 0;
+            const status = document.getElementById('status-display');
+            status.innerText = "Simulazione Corsa in Corso (Erba ➔ Ponte Lambro)";
+
+            simInterval = setInterval(() => {
+                simRatio += 0.05;
+                if (simRatio > 1) simRatio = 0;
+
+                // Interpolazione tra Erba (Km 43.332) e Ponte Lambro (Km 45.188)
+                const lat = 45.80200 + simRatio * (45.81700 - 45.80200);
+                const lon = 9.25500 + simRatio * (9.26500 - 9.25500);
+
+                updateRealtimePosition(lat, lon, 3);
+            }, 500);
         }
     </script>
 </body>
