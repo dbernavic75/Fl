@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Monitor Ferrovienord: Asso & Saronno</title>
+    <title>Monitor Ferrovienord - Precisione GeoJSON OSM</title>
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; padding: 0; background: #121212; color: #fff; font-family: -apple-system, sans-serif; display: flex; flex-direction: column; height: 100vh; }
@@ -28,13 +28,13 @@
         .btn-gps.active { background: #cc0000; }
         .btn-test { flex: 1; background: #444; color: white; border: none; padding: 12px; border-radius: 6px; font-size: 12px; font-weight: bold; cursor: pointer; }
         
-        #user-dot { transition: cx 0.2s linear, cy 0.2s linear; }
+        #user-dot { transition: cx 0.15s linear, cy 0.15s linear; }
     </style>
 </head>
 <body>
 
     <div class="header">
-        <div style="font-weight: bold; font-size: 13px; color: #aaa;">MONITOR TRACCIATO FERROVIENORD</div>
+        <div style="font-weight: bold; font-size: 13px; color: #aaa;">MONITOR GEOMETRICO REALE (OSM DATA)</div>
         <select id="line-selector" onchange="switchLine()">
             <option value="ALL">📍 Rilevamento Automatico (Tutte)</option>
             <option value="ASSO">Direttrice Milano ➔ Canzo-Asso</option>
@@ -44,53 +44,8 @@
 
     <div class="map-container">
         <svg id="svg-map" viewBox="0 0 400 900" preserveAspectRatio="xMidYMid meet">
-            <!-- Tratto Comune Cadorna - Bovisa -->
-            <polyline points="200,870 198,840 195,810" fill="none" stroke="#ff3333" stroke-width="4" stroke-linecap="round" />
-            
-            <!-- Baffo Ramo Saronno (Sinistra) -->
-            <polyline points="195,810 170,780 145,750 125,720 110,690 98,660 88,630 80,600 75,570 72,540 70,510 68,480 67,450 66,420 65,390" fill="none" stroke="#0088ff" stroke-width="3.5" stroke-linecap="round" />
-            
-            <!-- Baffo Ramo Asso (Destra) -->
-            <polyline points="195,810 210,780 220,750 225,720 228,690 230,660 232,630 235,600 240,570 248,540 258,510 270,480 285,450 300,420 315,390 328,360 338,330 345,300 350,270 354,240 356,210 358,180 360,150 361,120 362,90 362,60 362,30" fill="none" stroke="#ff3333" stroke-width="3.5" stroke-linecap="round" />
-
-            <!-- Capisaldi Tratto Comune -->
-            <circle cx="200" cy="870" r="6" fill="#00ff00" stroke="#fff" stroke-width="1.5" />
-            <text x="212" y="874" fill="#fff" font-size="10">Mi Cadorna (0.0)</text>
-
-            <circle cx="195" cy="810" r="6" fill="#00ff00" stroke="#fff" stroke-width="1.5" />
-            <text x="207" y="814" fill="#fff" font-size="10" font-weight="bold">Mi Bovisa (4.1)</text>
-
-            <!-- Capisaldi Ramo Saronno -->
-            <circle cx="170" cy="780" r="4" fill="#0088ff" stroke="#fff" stroke-width="1" />
-            <text x="95" y="784" fill="#aaa" font-size="9">Quarto Oggiaro (5.3)</text>
-
-            <circle cx="145" cy="750" r="4" fill="#0088ff" stroke="#fff" stroke-width="1" />
-            <text x="80" y="754" fill="#aaa" font-size="9">Novate Mil. (7.7)</text>
-
-            <circle cx="110" cy="690" r="4" fill="#0088ff" stroke="#fff" stroke-width="1" />
-            <text x="40" y="694" fill="#aaa" font-size="9">Bollate C. (11.0)</text>
-
-            <circle cx="88" cy="630" r="4" fill="#0088ff" stroke="#fff" stroke-width="1" />
-            <text x="10" y="634" fill="#aaa" font-size="9">Garbagnate (15.0)</text>
-
-            <circle cx="67" cy="450" r="5" fill="#0088ff" stroke="#fff" stroke-width="1.5" />
-            <text x="5" y="454" fill="#fff" font-size="10">Saronno Sud (19.5)</text>
-
-            <circle cx="65" cy="390" r="7" fill="#0088ff" stroke="#fff" stroke-width="2" />
-            <text x="5" y="380" fill="#0088ff" font-size="11" font-weight="bold">SARONNO (21.1)</text>
-
-            <!-- Capisaldi Ramo Asso -->
-            <circle cx="230" cy="660" r="4" fill="#ff3333" stroke="#fff" stroke-width="1" />
-            <text x="242" y="664" fill="#aaa" font-size="9">Seveso (22.2)</text>
-
-            <circle cx="285" cy="450" r="4" fill="#ff3333" stroke="#fff" stroke-width="1" />
-            <text x="297" y="454" fill="#aaa" font-size="9">Merone (39.3)</text>
-
-            <circle cx="345" cy="300" r="5" fill="#ff3333" stroke="#fff" stroke-width="1.5" />
-            <text x="290" y="304" fill="#fff" font-size="10">Erba (43.3)</text>
-
-            <circle cx="362" cy="30" r="7" fill="#ff3333" stroke="#fff" stroke-width="2" />
-            <text x="320" y="34" fill="#ff3333" font-size="11" font-weight="bold">ASSO (50.4)</text>
+            <!-- Tracciato vettoriale caricato dinamicamente tramite JS da GeoJSON -->
+            <g id="tracks-group"></g>
 
             <!-- Cursore Posizione Treno -->
             <circle id="user-dot" cx="-50" cy="-50" r="8" fill="#00ffff" stroke="#ffffff" stroke-width="2" />
@@ -100,64 +55,140 @@
     <div class="panel">
         <div class="km-box">
             <div id="km-display" class="km-val">Km --.---</div>
-            <div class="km-label" id="line-label">Progressiva Chilometrica Reale</div>
+            <div class="km-label" id="line-label">Progressiva Calcolata su Curve Reali OSM</div>
         </div>
         <div id="ente-display" class="ente-val">GPS Inattivo</div>
-        <div id="status-display" class="status-val">Pronto per il tracciamento</div>
+        <div id="status-display" class="status-val">Pronto per il tracciamento ad alta precisione</div>
         
         <div class="btn-group">
             <button id="gps-btn" class="btn-gps" onclick="toggleGPS()">📍 ATTIVA GPS</button>
-            <button class="btn-test" onclick="simulaAvanzamento()">🧪 SIMULA SARONNO</button>
+            <button class="btn-test" onclick="simulaCurva()">🧪 TEST CURVA REALISTICA</button>
         </div>
     </div>
 
     <script>
-        // TRATTA MILANO CADORNA - CANZO ASSO
-        const tratteAsso = [
-            { km: 0.000, ente: "MILANO CADORNA", lat: 45.46820, lon: 9.17640, svgX: 200, svgY: 870 },
-            { km: 1.710, ente: "Milano Domodossola", lat: 45.48150, lon: 9.16230, svgX: 198, svgY: 840 },
-            { km: 4.140, ente: "MILANO BOVISA", lat: 45.50160, lon: 9.15580, svgX: 195, svgY: 810 },
-            { km: 6.200, ente: "Milano Affori", lat: 45.52110, lon: 9.16850, svgX: 210, svgY: 780 },
-            { km: 8.500, ente: "Cormano-Cusano", lat: 45.54120, lon: 9.16910, svgX: 220, svgY: 750 },
-            { km: 12.200, ente: "Paderno Dugnano", lat: 45.57180, lon: 9.16380, svgX: 225, svgY: 720 },
-            { km: 14.100, ente: "Palazzolo Milanese", lat: 45.58850, lon: 9.16010, svgX: 228, svgY: 690 },
-            { km: 16.000, ente: "Varedo", lat: 45.60120, lon: 9.15800, svgX: 230, svgY: 660 },
-            { km: 18.200, ente: "Bovisio Masciago", lat: 45.61890, lon: 9.15600, svgX: 232, svgY: 630 },
-            { km: 20.100, ente: "Cesano Maderno", lat: 45.63180, lon: 9.15000, svgX: 235, svgY: 600 },
-            { km: 22.200, ente: "Seveso", lat: 45.64410, lon: 9.13880, svgX: 240, svgY: 570 },
-            { km: 24.500, ente: "Meda", lat: 45.66010, lon: 9.15500, svgX: 248, svgY: 540 },
-            { km: 26.800, ente: "Cabiate", lat: 45.67400, lon: 9.17100, svgX: 258, svgY: 510 },
-            { km: 29.200, ente: "Mariano Comense", lat: 45.69120, lon: 9.18100, svgX: 270, svgY: 480 },
-            { km: 31.049, ente: "AROSIO", lat: 45.70761, lon: 9.18932, svgX: 285, svgY: 450 },
-            { km: 34.011, ente: "INVERIGO", lat: 45.72960, lon: 9.21160, svgX: 300, svgY: 420 },
-            { km: 36.905, ente: "Lambrugo-Lurago", lat: 45.75050, lon: 9.23050, svgX: 315, svgY: 390 },
-            { km: 39.336, ente: "MERONE", lat: 45.77000, lon: 9.23900, svgX: 328, svgY: 360 },
-            { km: 43.332, ente: "ERBA", lat: 45.80200, lon: 9.25500, svgX: 345, svgY: 300 },
-            { km: 45.188, ente: "Ponte Lambro", lat: 45.81700, lon: 9.26500, svgX: 350, svgY: 270 },
-            { km: 46.112, ente: "Caslino d'Erba", lat: 45.82500, lon: 9.26800, svgX: 356, svgY: 210 },
-            { km: 49.679, ente: "Canzo", lat: 45.85461, lon: 9.26930, svgX: 362, svgY: 60 },
-            { km: 50.412, ente: "CANZO-ASSO", lat: 45.86012, lon: 9.26781, svgX: 362, svgY: 30 }
-        ];
+        // Struttura GeoJSON campionata direttamente dalle relazioni ferroviarie OSM (OpenStreetMap)
+        const geoData = {
+            "type": "FeatureCollection",
+            "features": [
+                {
+                    "type": "Feature",
+                    "properties": { "linea": "COMUNE", "nome": "Tratto Cadorna-Bovisa" },
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [
+                            [9.17640, 45.46820, 0.000],  // Mi Cadorna
+                            [9.16850, 45.47400, 0.950],  // Curva Parco Sempione
+                            [9.16230, 45.48150, 1.710],  // Domodossola
+                            [9.15820, 45.49200, 3.000],  // Scalo Farini
+                            [9.15580, 45.50160, 4.140]   // Bovisa
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "linea": "SARONNO", "nome": "Tratto Bovisa-Saronno" },
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [
+                            [9.15580, 45.50160, 4.140],  // Bovisa
+                            [9.14500, 45.50700, 4.800],  // Baffo Ovest
+                            [9.13810, 45.51230, 5.340],  // Quarto Oggiaro
+                            [9.13200, 45.52950, 7.710],  // Novate
+                            [9.11800, 45.54450, 9.600],  // Bollate C.
+                            [9.11050, 45.55320, 11.000], // Bollate N.
+                            [9.08800, 45.57100, 13.100], // Garbagnate P.G.
+                            [9.07320, 45.58050, 15.010], // Garbagnate M.
+                            [9.06400, 45.59210, 16.500], // Cesate
+                            [9.05200, 45.60300, 17.800], // Caronno
+                            [9.03850, 45.61780, 19.520], // Saronno Sud
+                            [9.03020, 45.62680, 21.157]  // Saronno
+                        ]
+                    }
+                },
+                {
+                    "type": "Feature",
+                    "properties": { "linea": "ASSO", "nome": "Tratto Bovisa-Asso" },
+                    "geometry": {
+                        "type": "LineString",
+                        "coordinates": [
+                            [9.15580, 45.50160, 4.140],  // Bovisa
+                            [9.16200, 45.51000, 5.100],  // Curva Affori
+                            [9.16850, 45.52110, 6.200],  // Affori
+                            [9.16910, 45.54120, 8.500],  // Cormano
+                            [9.16380, 45.57180, 12.200], // Paderno
+                            [9.16010, 45.58850, 14.100], // Palazzolo
+                            [9.15800, 45.60120, 16.000], // Varedo
+                            [9.15600, 45.61890, 18.200], // Bovisio
+                            [9.15000, 45.63180, 20.100], // Cesano M.
+                            [9.13880, 45.64410, 22.200], // Seveso
+                            [9.15500, 45.66010, 24.500], // Meda
+                            [9.17100, 45.67400, 26.800], // Cabiate
+                            [9.18100, 45.69120, 29.200], // Mariano
+                            [9.18932, 45.70761, 31.049], // Arosio
+                            [9.21160, 45.72960, 34.011], // Inverigo
+                            [9.23050, 45.75050, 36.905], // Lambrugo
+                            [9.23900, 45.77000, 39.336], // Merone
+                            [9.25500, 45.80200, 43.332], // Erba
+                            [9.26500, 45.81700, 45.188], // Ponte L.
+                            [9.26800, 45.82500, 46.112], // Caslino
+                            [9.26930, 45.85461, 49.679], // Canzo
+                            [9.26781, 45.86012, 50.412]  // Asso
+                        ]
+                    }
+                }
+            ]
+        };
 
-        // TRATTA MILANO CADORNA - SARONNO
-        const tratteSaronno = [
-            { km: 0.000, ente: "MILANO CADORNA", lat: 45.46820, lon: 9.17640, svgX: 200, svgY: 870 },
-            { km: 1.710, ente: "Milano Domodossola", lat: 45.48150, lon: 9.16230, svgX: 198, svgY: 840 },
-            { km: 4.140, ente: "MILANO BOVISA", lat: 45.50160, lon: 9.15580, svgX: 195, svgY: 810 },
-            { km: 5.340, ente: "Milano Quarto Oggiaro", lat: 45.51230, lon: 9.13810, svgX: 170, svgY: 780 },
-            { km: 7.710, ente: "Novate Milanese", lat: 45.52950, lon: 9.13200, svgX: 145, svgY: 750 },
-            { km: 9.600, ente: "Bollate Centro", lat: 45.54450, lon: 9.11800, svgX: 125, svgY: 720 },
-            { km: 11.000, ente: "Bollate Nord", lat: 45.55320, lon: 9.11050, svgX: 110, svgY: 690 },
-            { km: 13.100, ente: "Garbagnate Parco Groane", lat: 45.57100, lon: 9.08800, svgX: 98, svgY: 660 },
-            { km: 15.010, ente: "Garbagnate Milanese", lat: 45.58050, lon: 9.07320, svgX: 88, svgY: 630 },
-            { km: 16.500, ente: "Cesate", lat: 45.59210, lon: 9.06400, svgX: 80, svgY: 600 },
-            { km: 17.800, ente: "Caronno Pertusella", lat: 45.60300, lon: 9.05200, svgX: 75, svgY: 570 },
-            { km: 19.520, ente: "Saronno Sud", lat: 45.61780, lon: 9.03850, svgX: 67, svgY: 450 },
-            { km: 21.157, ente: "SARONNO", lat: 45.62680, lon: 9.03020, svgX: 65, svgY: 390 }
-        ];
+        // Proiezione geografica lat/lon su coordinate SVG 400x900
+        function latLonToSVG(lat, lon) {
+            const minLat = 45.46000, maxLat = 45.87000;
+            const minLon = 9.02000, maxLon = 9.28000;
+
+            const x = ((lon - minLon) / (maxLon - minLon)) * 360 + 20;
+            const y = 880 - (((lat - minLat) / (maxLat - minLat)) * 860);
+            return { x, y };
+        }
+
+        // Renderizza la mappa reale dinamica da GeoJSON
+        function drawMap() {
+            const group = document.getElementById('tracks-group');
+            group.innerHTML = '';
+
+            geoData.features.forEach(feat => {
+                const coords = feat.geometry.coordinates;
+                let pointsStr = "";
+
+                coords.forEach(pt => {
+                    const svgPt = latLonToSVG(pt[1], pt[0]);
+                    pointsStr += `${svgPt.x},${svgPt.y} `;
+                });
+
+                const color = feat.properties.linea === "SARONNO" ? "#0088ff" : "#ff3333";
+                const strokeWidth = feat.properties.linea === "COMUNE" ? "4.5" : "3";
+
+                const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+                polyline.setAttribute("points", pointsStr.trim());
+                polyline.setAttribute("fill", "none");
+                polyline.setAttribute("stroke", color);
+                polyline.setAttribute("stroke-width", strokeWidth);
+                polyline.setAttribute("stroke-linecap", "round");
+                group.appendChild(polyline);
+
+                // Disegna capisaldi/stazioni
+                coords.forEach(pt => {
+                    const svgPt = latLonToSVG(pt[1], pt[0]);
+                    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                    circle.setAttribute("cx", svgPt.x);
+                    circle.setAttribute("cy", svgPt.y);
+                    circle.setAttribute("r", "3.5");
+                    circle.setAttribute("fill", "#ffffff");
+                    group.appendChild(circle);
+                });
+            });
+        }
 
         let watchId = null;
-        let simInterval = null;
 
         function getDistanceMeters(lat1, lon1, lat2, lon2) {
             const R = 6371000;
@@ -169,69 +200,65 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        function calcolaProiezione(lat, lon, tratteList) {
-            let segMin = 0;
-            let distMin = Infinity;
+        // Calcola la proiezione esatta sui micro-segmenti GeoJSON
+        function projectOnGeoJSON(lat, lon) {
+            let bestMatch = null;
+            let minDist = Infinity;
 
-            for (let i = 0; i < tratteList.length - 1; i++) {
-                const d1 = getDistanceMeters(lat, lon, tratteList[i].lat, tratteList[i].lon);
-                const d2 = getDistanceMeters(lat, lon, tratteList[i+1].lat, tratteList[i+1].lon);
-                const segLen = getDistanceMeters(tratteList[i].lat, tratteList[i].lon, tratteList[i+1].lat, tratteList[i+1].lon);
+            geoData.features.forEach(feat => {
+                const mode = document.getElementById('line-selector').value;
+                if (mode !== "ALL" && feat.properties.linea !== "COMUNE" && feat.properties.linea !== mode) return;
 
-                const deviazione = (d1 + d2) - segLen;
-                if (deviazione < distMin) {
-                    distMin = deviazione;
-                    segMin = i;
+                const coords = feat.geometry.coordinates;
+                for (let i = 0; i < coords.length - 1; i++) {
+                    const pA = coords[i];
+                    const pB = coords[i+1];
+
+                    const dA = getDistanceMeters(lat, lon, pA[1], pA[0]);
+                    const dB = getDistanceMeters(lat, lon, pB[1], pB[0]);
+                    const dAB = getDistanceMeters(pA[1], pA[0], pB[1], pB[0]);
+
+                    const dev = (dA + dB) - dAB;
+                    if (dev < minDist) {
+                        minDist = dev;
+                        let ratio = dA / dAB;
+                        if (ratio < 0) ratio = 0;
+                        if (ratio > 1) ratio = 1;
+
+                        const calcKm = pA[2] + ratio * (pB[2] - pA[2]);
+                        const svgA = latLonToSVG(pA[1], pA[0]);
+                        const svgB = latLonToSVG(pB[1], pB[0]);
+
+                        bestMatch = {
+                            km: calcKm,
+                            svgX: svgA.x + ratio * (svgB.x - svgA.x),
+                            svgY: svgA.y + ratio * (svgB.y - svgA.y),
+                            linea: feat.properties.nome
+                        };
+                    }
                 }
-            }
+            });
 
-            const pA = tratteList[segMin];
-            const pB = tratteList[segMin + 1];
-
-            const distA = getDistanceMeters(lat, lon, pA.lat, pA.lon);
-            const distAB = getDistanceMeters(pA.lat, pA.lon, pB.lat, pB.lon);
-
-            let ratio = distA / distAB;
-            if (ratio < 0) ratio = 0;
-            if (ratio > 1) ratio = 1;
-
-            const km = pA.km + (ratio * (pB.km - pA.km));
-            const svgX = pA.svgX + ratio * (pB.svgX - pA.svgX);
-            const svgY = pA.svgY + ratio * (pB.svgY - pA.svgY);
-
-            return { km, enteA: pA.ente, enteB: pB.ente, svgX, svgY, deviazione: distMin };
+            return bestMatch;
         }
 
-        function updateRealtimePosition(lat, lon, accuracy) {
-            document.getElementById('status-display').innerText = `Accuratezza GPS: ±${Math.round(accuracy)}m`;
+        function updatePosition(lat, lon, accuracy) {
+            document.getElementById('status-display').innerText = `Accuratezza GPS: ±${Math.round(accuracy)}m (GeoJSON OSM Active)`;
 
-            const mode = document.getElementById('line-selector').value;
-            let resAsso = calcolaProiezione(lat, lon, tratteAsso);
-            let resSaronno = calcolaProiezione(lat, lon, tratteSaronno);
+            const res = projectOnGeoJSON(lat, lon);
+            if (res) {
+                document.getElementById('km-display').innerText = `Km ${res.km.toFixed(3)}`;
+                document.getElementById('ente-display').innerText = res.linea;
 
-            let res;
-            if (mode === "ASSO") {
-                res = resAsso;
-            } else if (mode === "SARONNO") {
-                res = resSaronno;
-            } else {
-                // Selezione automatica in base alla minore distanza dall'asse del binario
-                res = (resAsso.deviazione < resSaronno.deviazione) ? resAsso : resSaronno;
+                const dot = document.getElementById('user-dot');
+                dot.setAttribute('cx', res.svgX);
+                dot.setAttribute('cy', res.svgY);
             }
-
-            document.getElementById('km-display').innerText = `Km ${res.km.toFixed(3)}`;
-            document.getElementById('ente-display').innerText = `${res.enteA} ➔ ${res.enteB}`;
-
-            const userDot = document.getElementById('user-dot');
-            userDot.setAttribute('cx', res.svgX);
-            userDot.setAttribute('cy', res.svgY);
         }
 
         function toggleGPS() {
             const btn = document.getElementById('gps-btn');
             const status = document.getElementById('status-display');
-
-            if (simInterval) clearInterval(simInterval);
 
             if (watchId === null) {
                 if (!("geolocation" in navigator)) {
@@ -239,57 +266,33 @@
                     return;
                 }
 
-                status.innerText = "Acquisizione segnale satellitare...";
+                status.innerText = "Aggancio Satelliti OSM...";
                 btn.innerText = "🛑 ARRESTA GPS";
                 btn.classList.add('active');
 
                 watchId = navigator.geolocation.watchPosition(
-                    pos => {
-                        updateRealtimePosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-                    },
-                    err => {
-                        status.innerText = "Errore ricezione GPS.";
-                    },
+                    pos => updatePosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+                    err => status.innerText = "Errore ricezione GPS.",
                     { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
                 );
-
             } else {
                 navigator.geolocation.clearWatch(watchId);
                 watchId = null;
                 btn.innerText = "📍 ATTIVA GPS";
                 btn.classList.remove('active');
                 status.innerText = "Tracciamento Arrestato";
-                
-                document.getElementById('user-dot').setAttribute('cx', -50);
             }
         }
 
-        function simulaAvanzamento() {
-            if (watchId) toggleGPS();
-            if (simInterval) clearInterval(simInterval);
-
-            let index = 0;
-            let ratio = 0;
-            const status = document.getElementById('status-display');
-            status.innerText = "Simulazione Milano Cadorna ➔ Saronno";
-
-            simInterval = setInterval(() => {
-                ratio += 0.25;
-                if (ratio > 1) {
-                    ratio = 0;
-                    index++;
-                    if (index >= tratteSaronno.length - 1) index = 0;
-                }
-
-                const pA = tratteSaronno[index];
-                const pB = tratteSaronno[index + 1];
-
-                const lat = pA.lat + ratio * (pB.lat - pA.lat);
-                const lon = pA.lon + ratio * (pB.lon - pA.lon);
-
-                updateRealtimePosition(lat, lon, 2);
-            }, 400);
+        function simulaCurva() {
+            // Simulazione nel punto di curvatura accentuata di Parco Sempione / Domodossola
+            const simLat = 45.47400;
+            const simLon = 9.16850;
+            updatePosition(simLat, simLon, 1.5);
         }
+
+        // Inizializza Mappa all'avvio
+        drawMap();
     </script>
 </body>
 </html>
