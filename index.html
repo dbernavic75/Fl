@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Monitor Ferrovienord - Precisione GeoJSON OSM</title>
+    <title>Monitor Ferrovienord - Calibrato FL130</title>
     <style>
         * { box-sizing: border-box; }
         body { margin: 0; padding: 0; background: #121212; color: #fff; font-family: -apple-system, sans-serif; display: flex; flex-direction: column; height: 100vh; }
@@ -17,7 +17,7 @@
         .panel { background: #000; padding: 12px; border-top: 2px solid #333; text-align: center; }
         
         .km-box { background: #181818; border: 2px solid #00ff66; border-radius: 8px; padding: 6px; margin-bottom: 6px; }
-        .km-val { font-size: 30px; font-weight: bold; color: #00ff66; font-family: monospace; letter-spacing: 1px; }
+        .km-val { font-size: 32px; font-weight: bold; color: #00ff66; font-family: monospace; letter-spacing: 1px; }
         .km-label { font-size: 10px; color: #888; text-transform: uppercase; margin-top: 2px; }
         
         .ente-val { font-size: 14px; color: #ffcc00; margin-bottom: 4px; font-weight: bold; }
@@ -34,7 +34,7 @@
 <body>
 
     <div class="header">
-        <div style="font-weight: bold; font-size: 13px; color: #aaa;">MONITOR GEOMETRICO REALE (OSM DATA)</div>
+        <div style="font-weight: bold; font-size: 13px; color: #aaa;">MONITOR GEOMETRICO (CALIBRATO FNM FL130)</div>
         <select id="line-selector" onchange="switchLine()">
             <option value="ALL">📍 Rilevamento Automatico (Tutte)</option>
             <option value="ASSO">Direttrice Milano ➔ Canzo-Asso</option>
@@ -44,10 +44,7 @@
 
     <div class="map-container">
         <svg id="svg-map" viewBox="0 0 400 900" preserveAspectRatio="xMidYMid meet">
-            <!-- Tracciato vettoriale caricato dinamicamente tramite JS da GeoJSON -->
             <g id="tracks-group"></g>
-
-            <!-- Cursore Posizione Treno -->
             <circle id="user-dot" cx="-50" cy="-50" r="8" fill="#00ffff" stroke="#ffffff" stroke-width="2" />
         </svg>
     </div>
@@ -55,19 +52,59 @@
     <div class="panel">
         <div class="km-box">
             <div id="km-display" class="km-val">Km --.---</div>
-            <div class="km-label" id="line-label">Progressiva Calcolata su Curve Reali OSM</div>
+            <div class="km-label" id="line-label">Progressiva Calibrata su Fascicolo Linea FNM</div>
         </div>
         <div id="ente-display" class="ente-val">GPS Inattivo</div>
         <div id="status-display" class="status-val">Pronto per il tracciamento ad alta precisione</div>
         
         <div class="btn-group">
             <button id="gps-btn" class="btn-gps" onclick="toggleGPS()">📍 ATTIVA GPS</button>
-            <button class="btn-test" onclick="simulaCurva()">🧪 TEST CURVA REALISTICA</button>
+            <button class="btn-test" onclick="simulaCanzo()">🧪 TEST CANZO (Km 49+800)</button>
         </div>
     </div>
 
     <script>
-        // Struttura GeoJSON campionata direttamente dalle relazioni ferroviarie OSM (OpenStreetMap)
+        // Progressive Ufficiali di Fascicolo Linea Ferrovienord (FL 130/131)
+        const kmUfficialiFNM = {
+            "Milano Cadorna": 0.000,
+            "Milano Domodossola": 1.720,
+            "Milano Bovisa": 4.138,
+            "Milano Affori": 6.422,
+            "Cormano-Cusano": 8.980,
+            "Paderno Dugnano": 12.240,
+            "Palazzolo Milanese": 14.100,
+            "Varedo": 15.780,
+            "Bovisio Masciago": 17.920,
+            "Cesano Maderno": 20.250,
+            "Seveso": 21.200,
+            "Meda": 23.330,
+            "Cabiate": 25.560,
+            "Mariano Comense": 28.320,
+            "Carugo-Giussano": 31.050,
+            "Arosio": 33.120,
+            "Inverigo": 35.880,
+            "Lambrugo-Lurago": 38.010,
+            "Merone": 40.450,
+            "Erba": 43.710,
+            "Ponte Lambro": 45.520,
+            "Caslino d'Erba": 46.580,
+            "Canzo": 49.800,
+            "Canzo-Asso": 50.540,
+            
+            // Direttrice Saronno (FL 120)
+            "Quarto Oggiaro": 5.340,
+            "Novate Milanese": 7.710,
+            "Bollate Centro": 9.600,
+            "Bollate Nord": 11.000,
+            "Garbagnate Parco delle Groane": 13.100,
+            "Garbagnate Milanese": 15.010,
+            "Cesate": 16.500,
+            "Caronno Pertusella": 17.800,
+            "Saronno Sud": 19.520,
+            "Saronno": 21.157
+        };
+
+        // Tracciato ad alta precisione integrato dal file GeoJSON OSM (R16)
         const geoData = {
             "type": "FeatureCollection",
             "features": [
@@ -77,11 +114,11 @@
                     "geometry": {
                         "type": "LineString",
                         "coordinates": [
-                            [9.17640, 45.46820, 0.000],  // Mi Cadorna
-                            [9.16850, 45.47400, 0.950],  // Curva Parco Sempione
-                            [9.16230, 45.48150, 1.710],  // Domodossola
-                            [9.15820, 45.49200, 3.000],  // Scalo Farini
-                            [9.15580, 45.50160, 4.140]   // Bovisa
+                            [9.17640, 45.46820, "Milano Cadorna"],
+                            [9.16850, 45.47400, null],
+                            [9.16230, 45.48150, "Milano Domodossola"],
+                            [9.15820, 45.49200, null],
+                            [9.15580, 45.50160, "Milano Bovisa"]
                         ]
                     }
                 },
@@ -91,66 +128,63 @@
                     "geometry": {
                         "type": "LineString",
                         "coordinates": [
-                            [9.15580, 45.50160, 4.140],  // Bovisa
-                            [9.14500, 45.50700, 4.800],  // Baffo Ovest
-                            [9.13810, 45.51230, 5.340],  // Quarto Oggiaro
-                            [9.13200, 45.52950, 7.710],  // Novate
-                            [9.11800, 45.54450, 9.600],  // Bollate C.
-                            [9.11050, 45.55320, 11.000], // Bollate N.
-                            [9.08800, 45.57100, 13.100], // Garbagnate P.G.
-                            [9.07320, 45.58050, 15.010], // Garbagnate M.
-                            [9.06400, 45.59210, 16.500], // Cesate
-                            [9.05200, 45.60300, 17.800], // Caronno
-                            [9.03850, 45.61780, 19.520], // Saronno Sud
-                            [9.03020, 45.62680, 21.157]  // Saronno
+                            [9.15580, 45.50160, "Milano Bovisa"],
+                            [9.13810, 45.51230, "Quarto Oggiaro"],
+                            [9.13200, 45.52950, "Novate Milanese"],
+                            [9.11800, 45.54450, "Bollate Centro"],
+                            [9.11050, 45.55320, "Bollate Nord"],
+                            [9.08800, 45.57100, "Garbagnate Parco delle Groane"],
+                            [9.07320, 45.58050, "Garbagnate Milanese"],
+                            [9.06400, 45.59210, "Cesate"],
+                            [9.05200, 45.60300, "Caronno Pertusella"],
+                            [9.03850, 45.61780, "Saronno Sud"],
+                            [9.03020, 45.62680, "Saronno"]
                         ]
                     }
                 },
                 {
                     "type": "Feature",
-                    "properties": { "linea": "ASSO", "nome": "Tratto Bovisa-Asso" },
+                    "properties": { "linea": "ASSO", "nome": "Tratto Bovisa-Asso (GeoJSON R16)" },
                     "geometry": {
                         "type": "LineString",
                         "coordinates": [
-                            [9.15580, 45.50160, 4.140],  // Bovisa
-                            [9.16200, 45.51000, 5.100],  // Curva Affori
-                            [9.16850, 45.52110, 6.200],  // Affori
-                            [9.16910, 45.54120, 8.500],  // Cormano
-                            [9.16380, 45.57180, 12.200], // Paderno
-                            [9.16010, 45.58850, 14.100], // Palazzolo
-                            [9.15800, 45.60120, 16.000], // Varedo
-                            [9.15600, 45.61890, 18.200], // Bovisio
-                            [9.15000, 45.63180, 20.100], // Cesano M.
-                            [9.13880, 45.64410, 22.200], // Seveso
-                            [9.15500, 45.66010, 24.500], // Meda
-                            [9.17100, 45.67400, 26.800], // Cabiate
-                            [9.18100, 45.69120, 29.200], // Mariano
-                            [9.18932, 45.70761, 31.049], // Arosio
-                            [9.21160, 45.72960, 34.011], // Inverigo
-                            [9.23050, 45.75050, 36.905], // Lambrugo
-                            [9.23900, 45.77000, 39.336], // Merone
-                            [9.25500, 45.80200, 43.332], // Erba
-                            [9.26500, 45.81700, 45.188], // Ponte L.
-                            [9.26800, 45.82500, 46.112], // Caslino
-                            [9.26930, 45.85461, 49.679], // Canzo
-                            [9.26781, 45.86012, 50.412]  // Asso
+                            [9.15580, 45.50160, "Milano Bovisa"],
+                            [9.16200, 45.51000, null],
+                            [9.16850, 45.52110, "Milano Affori"],
+                            [9.16910, 45.54120, "Cormano-Cusano"],
+                            [9.16380, 45.57180, "Paderno Dugnano"],
+                            [9.16010, 45.58850, "Palazzolo Milanese"],
+                            [9.15800, 45.60120, "Varedo"],
+                            [9.15600, 45.61890, "Bovisio Masciago"],
+                            [9.15000, 45.63180, "Cesano Maderno"],
+                            [9.13880, 45.64410, "Seveso"],
+                            [9.15500, 45.66010, "Meda"],
+                            [9.17100, 45.67400, "Cabiate"],
+                            [9.18100, 45.69120, "Mariano Comense"],
+                            [9.18500, 45.70000, "Carugo-Giussano"],
+                            [9.18932, 45.70761, "Arosio"],
+                            [9.21160, 45.72960, "Inverigo"],
+                            [9.23050, 45.75050, "Lambrugo-Lurago"],
+                            [9.23900, 45.77000, "Merone"],
+                            [9.25500, 45.80200, "Erba"],
+                            [9.26500, 45.81700, "Ponte Lambro"],
+                            [9.26800, 45.82500, "Caslino d'Erba"],
+                            [9.26930, 45.85461, "Canzo"],
+                            [9.27145, 45.85312, "Canzo-Asso"]
                         ]
                     }
                 }
             ]
         };
 
-        // Proiezione geografica lat/lon su coordinate SVG 400x900
         function latLonToSVG(lat, lon) {
             const minLat = 45.46000, maxLat = 45.87000;
             const minLon = 9.02000, maxLon = 9.28000;
-
             const x = ((lon - minLon) / (maxLon - minLon)) * 360 + 20;
             const y = 880 - (((lat - minLat) / (maxLat - minLat)) * 860);
             return { x, y };
         }
 
-        // Renderizza la mappa reale dinamica da GeoJSON
         function drawMap() {
             const group = document.getElementById('tracks-group');
             group.innerHTML = '';
@@ -175,20 +209,19 @@
                 polyline.setAttribute("stroke-linecap", "round");
                 group.appendChild(polyline);
 
-                // Disegna capisaldi/stazioni
                 coords.forEach(pt => {
-                    const svgPt = latLonToSVG(pt[1], pt[0]);
-                    const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                    circle.setAttribute("cx", svgPt.x);
-                    circle.setAttribute("cy", svgPt.y);
-                    circle.setAttribute("r", "3.5");
-                    circle.setAttribute("fill", "#ffffff");
-                    group.appendChild(circle);
+                    if (pt[2]) {
+                        const svgPt = latLonToSVG(pt[1], pt[0]);
+                        const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                        circle.setAttribute("cx", svgPt.x);
+                        circle.setAttribute("cy", svgPt.y);
+                        circle.setAttribute("r", "4");
+                        circle.setAttribute("fill", "#ffffff");
+                        group.appendChild(circle);
+                    }
                 });
             });
         }
-
-        let watchId = null;
 
         function getDistanceMeters(lat1, lon1, lat2, lon2) {
             const R = 6371000;
@@ -200,7 +233,16 @@
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        // Calcola la proiezione esatta sui micro-segmenti GeoJSON
+        function getCalibratedKm(stazA, stazB, ratio) {
+            let kmA = kmUfficialiFNM[stazA];
+            let kmB = kmUfficialiFNM[stazB];
+
+            if (kmA === undefined) kmA = 0;
+            if (kmB === undefined) kmB = kmA + 1;
+
+            return kmA + ratio * (kmB - kmA);
+        }
+
         function projectOnGeoJSON(lat, lon) {
             let bestMatch = null;
             let minDist = Infinity;
@@ -225,7 +267,7 @@
                         if (ratio < 0) ratio = 0;
                         if (ratio > 1) ratio = 1;
 
-                        const calcKm = pA[2] + ratio * (pB[2] - pA[2]);
+                        const calcKm = getCalibratedKm(pA[2], pB[2], ratio);
                         const svgA = latLonToSVG(pA[1], pA[0]);
                         const svgB = latLonToSVG(pB[1], pB[0]);
 
@@ -243,7 +285,7 @@
         }
 
         function updatePosition(lat, lon, accuracy) {
-            document.getElementById('status-display').innerText = `Accuratezza GPS: ±${Math.round(accuracy)}m (GeoJSON OSM Active)`;
+            document.getElementById('status-display').innerText = `Accuratezza GPS: ±${Math.round(accuracy)}m (FL130 FNM Calibro)`;
 
             const res = projectOnGeoJSON(lat, lon);
             if (res) {
@@ -256,6 +298,7 @@
             }
         }
 
+        let watchId = null;
         function toggleGPS() {
             const btn = document.getElementById('gps-btn');
             const status = document.getElementById('status-display');
@@ -266,7 +309,7 @@
                     return;
                 }
 
-                status.innerText = "Aggancio Satelliti OSM...";
+                status.innerText = "Aggancio Satelliti FNM...";
                 btn.innerText = "🛑 ARRESTA GPS";
                 btn.classList.add('active');
 
@@ -284,14 +327,14 @@
             }
         }
 
-        function simulaCurva() {
-            // Simulazione nel punto di curvatura accentuata di Parco Sempione / Domodossola
-            const simLat = 45.47400;
-            const simLon = 9.16850;
-            updatePosition(simLat, simLon, 1.5);
+        function switchLine() {
+            drawMap();
         }
 
-        // Inizializza Mappa all'avvio
+        function simulaCanzo() {
+            updatePosition(45.85461, 9.26930, 2.0);
+        }
+
         drawMap();
     </script>
 </body>
