@@ -1,149 +1,228 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Milano-Asso: Monitor GPS Chilometrica</title>
-    <style>
-        body { font-family: system-ui, -apple-system, sans-serif; padding: 15px; background: #121212; color: #f0f0f0; margin: 0; }
-        .card { background: #1e1e1e; padding: 18px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); max-width: 450px; margin: 0 auto; border: 1px solid #333; }
-        h2 { margin-top: 0; font-size: 1.2rem; color: #00bcd4; text-align: center; }
-        button { width: 100%; padding: 14px; margin: 15px 0; background: #007bff; color: white; border: none; border-radius: 8px; font-size: 1rem; font-weight: bold; cursor: pointer; }
-        button.active { background: #28a745; }
-        .result-box { margin-top: 15px; padding: 15px; background: #2a2a2a; border-radius: 8px; text-align: center; border-left: 5px solid #00bcd4; }
-        .result-title { font-size: 0.8rem; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
-        .result-value { font-size: 2.2rem; font-weight: bold; color: #39ff14; margin-top: 5px; font-family: monospace; }
-        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; font-size: 0.85rem; color: #bbb; }
-        .info-item { background: #222; padding: 8px; border-radius: 6px; text-align: center; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mappa con Tracciato e GPS</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    #controls {
+      padding: 10px 15px;
+      background-color: #f8f9fa;
+      border-bottom: 1px solid #dee2e6;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-gps {
+      background-color: #007bff;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-gps.active {
+      background-color: #dc3545;
+    }
+
+    #gps-status {
+      font-size: 13px;
+      color: #6c757d;
+    }
+
+    #map {
+      width: 100vw;
+      height: calc(100vh - 53px);
+    }
+
+    /* Icona personalizzata Posizione Utente */
+    .user-position-marker {
+      background-color: #007bff;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 3px solid #ffffff;
+      box-shadow: 0 0 6px rgba(0,0,0,0.4);
+    }
+  </style>
 </head>
 <body>
 
-<div class="card">
-    <h2>Tratta Milano Cadorna - Asso (FL130)</h2>
+  <div id="controls">
+    <button id="btn-gps" class="btn-gps" onclick="toggleGPS()">
+      <span>📍</span> <span id="btn-label">Attiva GPS</span>
+    </button>
+    <span id="gps-status">GPS Disattivato</span>
+  </div>
 
-    <button id="btnGPS" onclick="toggleGPS()">ATTIVA TRACCIAMENTO GPS</button>
+  <div id="map"></div>
 
-    <div class="result-box">
-        <div class="result-title">Chilometrica Attuale</div>
-        <div class="result-value" id="risultato">--+---</div>
-    </div>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <div class="info-grid">
-        <div class="info-item">Stazione vicina: <br><strong id="stazioneVicina" style="color:#fff;">--</strong></div>
-        <div class="info-item">Accuratezza GPS: <br><strong id="accuratezza" style="color:#fff;">-- m</strong></div>
-    </div>
-</div>
+  <script>
+    // 1. Inizializzazione Mappa
+    const map = L.map('map').setView([45.8101, 9.2725], 13); // Coordinate di default
 
-<script>
-// Capisaldi di riferimento linea Milano-Asso (FL130) con coordinate [Lat, Lon] e Km reale
-const tracciatoMilanoAsso = [
-    { nome: "Milano Cadorna", lat: 45.46820, lon: 9.17640, km: 0.000 },
-    { nome: "Milano Bovisa", lat: 45.50150, lon: 9.16090, km: 4.185 },
-    { nome: "Cormano-Cusano", lat: 45.54810, lon: 9.16780, km: 9.420 },
-    { nome: "Cesano Maderno", lat: 45.63100, lon: 9.14810, km: 19.850 },
-    { nome: "Seveso", lat: 45.64500, lon: 9.14020, km: 21.210 },
-    { nome: "Camnago-Lentate", lat: 45.67030, lon: 9.12350, km: 24.380 },
-    { nome: "Mariano Comense", lat: 45.69480, lon: 9.18020, km: 29.800 },
-    { nome: "Erbes", lat: 45.81250, lon: 9.22700, km: 43.150 },
-    { nome: "Canzo", lat: 45.85010, lon: 9.27890, km: 48.910 },
-    { nome: "Canzo-Asso", lat: 45.86120, lon: 9.27810, km: 50.040 }
-];
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-let watchId = null;
+    // 2. Esempio Tracciato (Polyline)
+    const trackCoordinates = [
+      [45.8101, 9.2725],
+      [45.8130, 9.2760],
+      [45.8160, 9.2800],
+      [45.8200, 9.2820]
+    ];
 
-function toggleGPS() {
-    const btn = document.getElementById('btnGPS');
-    if (watchId === null) {
-        if ("geolocation" in navigator) {
-            watchId = navigator.geolocation.watchPosition(
-                aggiornaPosizione, 
-                gestisciErrore, 
-                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-            );
-            btn.innerText = "DISATTIVA GPS";
-            btn.classList.add('active');
-        } else {
-            alert("Geolocalizzazione non supportata dal browser.");
+    const polyline = L.polyline(trackCoordinates, {
+      color: '#ff4757',
+      weight: 5,
+      opacity: 0.8
+    }).addTo(map);
+
+    // Adatta la vista al tracciato
+    map.fitBounds(polyline.getBounds());
+
+    // 3. Gestione Geolocalizzazione GPS
+    let watchId = null;
+    let userMarker = null;
+    let userAccuracyCircle = null;
+    let isFirstFix = true;
+
+    function toggleGPS() {
+      if (watchId === null) {
+        startGPS();
+      } else {
+        stopGPS();
+      }
+    }
+
+    function startGPS() {
+      if (!("geolocation" in navigator)) {
+        alert("La geolocalizzazione non è supportata dal browser in uso.");
+        return;
+      }
+
+      const btn = document.getElementById("btn-gps");
+      const label = document.getElementById("btn-label");
+      const status = document.getElementById("gps-status");
+
+      status.textContent = "Ricerca segnale...";
+      label.textContent = "Disattiva GPS";
+      btn.classList.add("active");
+
+      isFirstFix = true;
+
+      watchId = navigator.geolocation.watchPosition(
+        onGpsSuccess,
+        onGpsError,
+        {
+          enableHighAccuracy: true,
+          maximumAge: 1000,
+          timeout: 10000
         }
-    } else {
+      );
+    }
+
+    function stopGPS() {
+      if (watchId !== null) {
         navigator.geolocation.clearWatch(watchId);
         watchId = null;
-        btn.innerText = "ATTIVA TRACCIAMENTO GPS";
-        btn.classList.remove('active');
-        document.getElementById('risultato').innerText = "--+---";
-        document.getElementById('accuratezza').innerText = "-- m";
-        document.getElementById('stazioneVicina').innerText = "--";
-    }
-}
+      }
 
-// Convertitore da gradi a radianti
-const toRad = deg => (deg * Math.PI) / 180;
+      if (userMarker) map.removeLayer(userMarker);
+      if (userAccuracyCircle) map.removeLayer(userAccuracyCircle);
 
-// Calcolo distanza in metri tra due punti geografici (Haversine)
-function calcolaDistanzaMetri(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // Raggio terrestre in metri
-    const dLat = toRad(lat2 - lat1);
-    const dLon = toRad(lon2 - lon1);
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
-}
+      userMarker = null;
+      userAccuracyCircle = null;
 
-function aggiornaPosizione(pos) {
-    const userLat = pos.coords.latitude;
-    const userLon = pos.coords.longitude;
-    const acc = Math.round(pos.coords.accuracy);
+      const btn = document.getElementById("btn-gps");
+      const label = document.getElementById("btn-label");
+      const status = document.getElementById("gps-status");
 
-    document.getElementById('accuratezza').innerText = `± ${acc} m`;
-
-    let segmentoOttimale = null;
-    let minDistanzaDalBinario = Infinity;
-    let kmCalcolato = 0;
-
-    // Proiezione del punto GPS sui segmenti del tracciato
-    for (let i = 0; i < tracciatoMilanoAsso.length - 1; i++) {
-        const p1 = tracciatoMilanoAsso[i];
-        const p2 = tracciatoMilanoAsso[i + 1];
-
-        const distP1P2 = calcolaDistanzaMetri(p1.lat, p1.lon, p2.lat, p2.lon);
-        const distUserP1 = calcolaDistanzaMetri(userLat, userLon, p1.lat, p1.lon);
-        const distUserP2 = calcolaDistanzaMetri(userLat, userLon, p2.lat, p2.lon);
-
-        // Proiezione ortogonale approssimata sul segmento
-        let t = ((userLat - p1.lat) * (p2.lat - p1.lat) + (userLon - p1.lon) * (p2.lon - p1.lon)) /
-                (Math.pow(p2.lat - p1.lat, 2) + Math.pow(p2.lon - p1.lon, 2));
-
-        t = Math.max(0, Math.min(1, t)); // Clamp tra 0 e 1 per stare nel segmento
-
-        const projLat = p1.lat + t * (p2.lat - p1.lat);
-        const projLon = p1.lon + t * (p2.lon - p1.lon);
-        const distOrtogonale = calcolaDistanzaMetri(userLat, userLon, projLat, projLon);
-
-        if (distOrtogonale < minDistanzaDalBinario) {
-            minDistanzaDalBinario = distOrtogonale;
-            // Interpolazione progressiva chilometrica tra p1 e p2
-            kmCalcolato = p1.km + t * (p2.km - p1.km);
-            segmentoOttimale = p1;
-        }
+      label.textContent = "Attiva GPS";
+      status.textContent = "GPS Disattivato";
+      btn.classList.remove("active");
     }
 
-    // Formattazione Chilometrica in Km + Metri
-    const kmStr = Math.floor(kmCalcolato);
-    const metriStr = String(Math.round((kmCalcolato - kmStr) * 1000)).padStart(3, '0');
+    function onGpsSuccess(position) {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      const accuracy = position.coords.accuracy;
+      const userLatLng = [lat, lng];
 
-    document.getElementById('risultato').innerText = `${kmStr}+${metriStr}`;
-    if (segmentoOttimale) {
-        document.getElementById('stazioneVicina').innerText = segmentoOttimale.nome;
+      // Aggiorna o crea il cerchio di accuratezza
+      if (userAccuracyCircle) {
+        userAccuracyCircle.setLatLng(userLatLng).setRadius(accuracy);
+      } else {
+        userAccuracyCircle = L.circle(userLatLng, {
+          radius: accuracy,
+          color: '#007bff',
+          fillColor: '#007bff',
+          fillOpacity: 0.15,
+          weight: 1
+        }).addTo(map);
+      }
+
+      // Aggiorna o crea il marcatore utente
+      if (userMarker) {
+        userMarker.setLatLng(userLatLng);
+      } else {
+        const userIcon = L.divIcon({
+          className: 'custom-user-icon',
+          html: '<div class="user-position-marker"></div>',
+          iconSize: [20, 20],
+          iconAnchor: [10, 10]
+        });
+
+        userMarker = L.marker(userLatLng, { icon: userIcon }).addTo(map);
+      }
+
+      // Al primo punto valido, centra la mappa sulla posizione attuale
+      if (isFirstFix) {
+        map.setView(userLatLng, 16);
+        isFirstFix = false;
+      }
+
+      document.getElementById("gps-status").textContent = `Accuratezza: ±${Math.round(accuracy)}m`;
     }
-}
 
-function gestisciErrore(err) {
-    alert("Errore GPS: " + err.message);
-}
-</script>
-
+    function onGpsError(error) {
+      let msg = "Errore rilevamento GPS.";
+      switch (error.code) {
+        case error.PERMISSION_DENIED:
+          msg = "Permesso GPS negato.";
+          break;
+        case error.POSITION_UNAVAILABLE:
+          msg = "Segnale non disponibile.";
+          break;
+        case error.TIMEOUT:
+          msg = "Richiesta GPS scaduta.";
+          break;
+      }
+      document.getElementById("gps-status").textContent = msg;
+      stopGPS();
+    }
+  </script>
 </body>
 </html>
