@@ -3,34 +3,63 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tracciamento Chilometrica Ferroviaria</title>
+  <title>Mappa Percorso GeoJSON con GPS</title>
+  
+  <!-- CSS Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  
+  <style>
+    #map {
+      height: 100vh;
+      width: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    /* Stile per il pulsante custom "Centra su GPS" */
+    .gps-btn {
+      background-color: #ffffff;
+      border: 2px solid rgba(0,0,0,0.2);
+      border-radius: 4px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+      box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+    }
+    .gps-btn:active {
+      background-color: #f4f4f4;
+    }
+
+    /* Stile per l'icona del marker GPS */
+    .user-location-marker {
+      background-color: #0078FF;
+      border: 3px solid #ffffff;
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(0,0,0,0.5);
+    }
+  </style>
 </head>
 <body>
 
-  <!-- STEP 1: Interfaccia Overlay (Posizionata in alto a destra) -->
-  <div id="km-box" style="
-    position: fixed; 
-    top: 15px; 
-    right: 15px; 
-    background: rgba(0, 0, 0, 0.85); 
-    color: #00ffcc; 
-    padding: 12px 20px; 
-    border-radius: 8px; 
-    font-family: monospace; 
-    font-size: 1.4rem; 
-    font-weight: bold;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-    z-index: 9999;
-    text-align: center;">
-    KM: <span id="km-display">--+---</span>
-  </div>
+  <div id="map"></div>
+
+  <!-- JS Leaflet -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // STEP 2: Dichiarazione Dati e Funzioni Matematiche
-    
-    // Array delle coordinate della linea (da Milano Cadorna verso Asso)
-    const tracciato = [
-     [9.1752941, 45.4685821],
+    // Dichiarazione dell'oggetto GeoJSON
+    const geojsonData = {
+      "type": "Feature",
+      "geometry": {
+        "type": "MultiLineString",
+        "coordinates": [
+          [
+            [9.1752941, 45.4685821],
             [9.175141, 45.4686991],
             [9.1735625, 45.4699173],
             [9.1735156, 45.4699524],
@@ -918,102 +947,105 @@
           ],
           [
             [9.1733727, 45.4700304],
-            [9.1734303, 45.4699932] 
-    ];
+            [9.1734303, 45.4699932]
+          ]
+        ]
+      }
+    };
 
-    let distanzeCumulate = [];
-    let lunghezzaTotale = 0;
+    // Inizializzazione mappa
+    const map = L.map('map').setView([45.66, 9.20], 10);
 
-    // Calcolo distanza Haversine tra due punti GPS (in km)
-    function calcolaDistanzaHaversine(p1, p2) {
-      const R = 6371;
-      const dLat = (p2.lat - p1.lat) * Math.PI / 180;
-      const dLng = (p2.lng - p1.lng) * Math.PI / 180;
-      const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) *
-                Math.sin(dLng/2) * Math.sin(dLng/2);
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    }
+    // Layer OpenStreetMap
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap'
+    }).addTo(map);
 
-    // Pre-calcolo delle progressive lungo la spezzata
-    function inizializzaTracciato() {
-      distanzeCumulate = [0];
-      lunghezzaTotale = 0;
-      for (let i = 0; i < tracciato.length - 1; i++) {
-        const d = calcolaDistanzaHaversine(tracciato[i], tracciato[i+1]);
-        lunghezzaTotale += d;
-        distanzeCumulate.push(lunghezzaTotale);
+    // Layer GeoJSON tracciato
+    const routeLayer = L.geoJSON(geojsonData, {
+      style: {
+        color: '#0066cc',
+        weight: 4,
+        opacity: 0.8
+      }
+    }).addTo(map);
+
+    // Adatta la vista iniziale al percorso
+    map.fitBounds(routeLayer.getBounds());
+
+    // --- GESTIONE TRACCIAMENTO GPS ---
+    let userMarker = null;
+    let accuracyCircle = null;
+    let lastLatLng = null;
+
+    // Crea la Custom Icon per il punto GPS
+    const locationIcon = L.divIcon({
+      className: 'user-location-marker',
+      iconSize: [16, 16],
+      iconAnchor: [8, 8]
+    });
+
+    // Funzione aggiornamento posizione da dati GPS
+    function onLocationFound(e) {
+      const latlng = [e.coords.latitude, e.coords.longitude];
+      const accuracy = e.coords.accuracy;
+      lastLatLng = latlng;
+
+      if (!userMarker) {
+        // Primo fix della posizione: creo il cerchio di accuratezza ed il marker
+        accuracyCircle = L.circle(latlng, {
+          radius: accuracy,
+          color: '#0078FF',
+          fillColor: '#0078FF',
+          fillOpacity: 0.15,
+          weight: 1
+        }).addTo(map);
+
+        userMarker = L.marker(latlng, { icon: locationIcon })
+          .addTo(map)
+          .bindPopup(`<b>Sei qui</b><br>Accuratezza GPS: ±${Math.round(accuracy)} metri`);
+      } else {
+        // Aggiorno le coordinate esistenti in tempo reale
+        userMarker.setLatLng(latlng);
+        accuracyCircle.setLatLng(latlng);
+        accuracyCircle.setRadius(accuracy);
+        userMarker.getPopup().setContent(`<b>Sei qui</b><br>Accuratezza GPS: ±${Math.round(accuracy)} metri`);
       }
     }
 
-    // Proiezione del punto GPS sul segmento di binario più vicino
-    function calcolaChilometrica(posAttuale) {
-      let minDistanza = Infinity;
-      let kmRisultato = 0;
+    function onLocationError(e) {
+      alert("Impossibile rilevare la posizione GPS. Verificare di aver concesso i permessi e di aver attivato la geolocalizzazione sul dispositivo.\nErrore: " + e.message);
+    }
 
-      for (let i = 0; i < tracciato.length - 1; i++) {
-        const A = tracciato[i];
-        const B = tracciato[i+1];
-        
-        const dx = B.lng - A.lng;
-        const dy = B.lat - A.lat;
-        const lenSq = dx * dx + dy * dy;
-        
-        let t = 0;
-        if (lenSq > 0) {
-          t = ((posAttuale.lng - A.lng) * dx + (posAttuale.lat - A.lat) * dy) / lenSq;
-          t = Math.max(0, Math.min(1, t));
+    // Avvio del tracciamento continuo se supportato
+    if ('geolocation' in navigator) {
+      navigator.geolocation.watchPosition(onLocationFound, onLocationError, {
+        enableHighAccuracy: true, // Richiede il sensore GPS hardware
+        maximumAge: 1000,         // Non usa posizioni in cache vecchie
+        timeout: 10000            // Timeout scansione
+      });
+    } else {
+      alert("La geolocalizzazione non è supportata da questo browser.");
+    }
+
+    // --- Aggiunta Pulsante "Centra su GPS" sulla Mappa ---
+    const gpsControl = L.control({ position: 'topright' });
+    gpsControl.onAdd = function() {
+      const btn = L.DomUtil.create('button', 'gps-btn');
+      btn.innerHTML = '🎯 Mia Posizione';
+      btn.onclick = function(e) {
+        L.DomEvent.stopPropagation(e);
+        if (lastLatLng) {
+          map.setView(lastLatLng, 15);
+          if (userMarker) userMarker.openPopup();
+        } else {
+          alert("Posizione GPS non ancora acquisita. Attendi qualche secondo...");
         }
-
-        const puntoProiettato = { lat: A.lat + t * dy, lng: A.lng + t * dx };
-        const distDalTracciato = calcolaDistanzaHaversine(posAttuale, puntoProiettato);
-
-        if (distDalTracciato < minDistanza) {
-          minDistanza = distDalTracciato;
-          const distParziale = calcolaDistanzaHaversine(A, puntoProiettato);
-          kmRisultato = distanzeCumulate[i] + distParziale;
-        }
-      }
-
-      return kmRisultato;
-    }
-
-    // Formattazione nel formato ferroviario (es. 12+350)
-    function formattaKm(km) {
-      const kmInteri = Math.floor(km);
-      const metri = Math.round((km - kmInteri) * 1000);
-      const metriStr = metri.toString().padStart(3, '0');
-      return `${kmInteri}+${metriStr}`;
-    }
-
-    // Inizializzazione della tabella delle distanze all'avvio
-    inizializzaTracciato();
-
-
-    // STEP 3: Gestione GPS e Aggiornamento In Tempo Reale
-    function avviaTracciamentoGPS() {
-      if ("geolocation" in navigator) {
-        navigator.geolocation.watchPosition(
-          (position) => {
-            const posAttuale = {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude
-            };
-
-            // Calcolo del progressivo dal GPS
-            const kmProgressivo = calcolaChilometrica(posAttuale);
-
-            // Per corse da Asso verso Cadorna, sostituire con: (lunghezzaTotale - kmProgressivo)
-            document.getElementById("km-display").innerText = formattaKm(kmProgressivo);
-          },
-          (error) => console.error("Errore lettura GPS:", error),
-          { enableHighAccuracy: true, maximumAge: 1000, timeout: 5000 }
-        );
-      }
-    }
-
-    // Avvio del servizio
-    avviaTracciamentoGPS();
+      };
+      return btn;
+    };
+    gpsControl.addTo(map);
   </script>
 
 </body>
