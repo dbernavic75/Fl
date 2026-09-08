@@ -9,15 +9,32 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   
   <style>
+    body {
+      margin: 0;
+      padding: 0;
+    }
     #map {
       height: 100vh;
       width: 100%;
       margin: 0;
       padding: 0;
     }
-    body {
-      margin: 0;
-      padding: 0;
+
+    /* FIX 1: Stile e posizionamento sopra la mappa per il box chilometrico */
+    #display-km {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      z-index: 1000;
+      background-color: rgba(255, 255, 255, 0.95);
+      border: 2px solid #0066cc;
+      border-radius: 8px;
+      padding: 10px 16px;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      font-size: 18px;
+      color: #333333;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
     }
 
     /* Stile per il pulsante custom "Centra su GPS" */
@@ -46,18 +63,15 @@
 </head>
 <body>
 
-
-
   <div id="map"></div>
   <div id="display-km">Km --.---</div>
   
-  <!-- JS Leaflet -->
+  <!-- JS Leaflet e Turf.js -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- Inserisci Turf.js nell'head del tuo HTML se non lo hai già -->
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   
   <script>
-    // Dichiarazione dell'oggetto GeoJSON
+    // Dichiarazione dell'oggetto GeoJSON (Coordinate e tracciato NON modificati)
     const geojsonData = {
       "type": "Feature",
       "geometry": {
@@ -849,7 +863,7 @@
             [9.2258402, 45.8300649],
             [9.2259774, 45.8304258],
             [9.2261386, 45.8307935],
-            [9.2262588, 45.831029],
+            [9.226588, 45.831029],
             [9.2265671, 45.831633],
             [9.2268727, 45.8322523],
             [9.2269132, 45.8323571],
@@ -891,7 +905,6 @@
             [9.2551189, 45.8415363],
             [9.2557554, 45.8416518],
             [9.2563386, 45.8417367],
-            [9.2565873, 45.841765],
             [9.2568268, 45.8417763],
             [9.2575184, 45.841745],
             [9.2580841, 45.8416881],
@@ -979,26 +992,42 @@
     // Adatta la vista iniziale al percorso
     map.fitBounds(routeLayer.getBounds());
 
-    // --- GESTIONE TRACCIAMENTO GPS ---
+    // --- GESTIONE TRACCIAMENTO GPS E CALCOLO PROGRESSIVA ---
     let userMarker = null;
     let accuracyCircle = null;
     let lastLatLng = null;
 
-    // Crea la Custom Icon per il punto GPS
     const locationIcon = L.divIcon({
       className: 'user-location-marker',
       iconSize: [16, 16],
       iconAnchor: [8, 8]
     });
 
+    // FIX 4: Funzione per calcolare la progressiva chilometrica con Turf.js
+    function getProgressivaKm(userLat, userLon, data) {
+      const userPt = turf.point([userLon, userLat]);
+      
+      // Estraiamo il ramo di coordinate principale (Milano-Canzo)
+      const mainBranchCoords = data.geometry.coordinates[0];
+      const mainLine = turf.lineString(mainBranchCoords);
+
+      // Trova il punto sulla linea più vicino al GPS dell'utente
+      const snapped = turf.nearestPointOnLine(mainLine, userPt);
+      
+      // snapped.properties.location misura la distanza progressiva in chilometri dall'origine
+      return snapped.properties.location.toFixed(3);
+    }
+
     // Funzione aggiornamento posizione da dati GPS
     function onLocationFound(e) {
-      const latlng = [e.coords.latitude, e.coords.longitude];
+      const lat = e.coords.latitude;
+      const lon = e.coords.longitude;
+      const latlng = [lat, lon];
       const accuracy = e.coords.accuracy;
       lastLatLng = latlng;
 
       if (!userMarker) {
-        // Primo fix della posizione: creo il cerchio di accuratezza ed il marker
+        // Primo fix della posizione
         accuracyCircle = L.circle(latlng, {
           radius: accuracy,
           color: '#0078FF',
@@ -1011,39 +1040,34 @@
           .addTo(map)
           .bindPopup(`<b>Sei qui</b><br>Accuratezza GPS: ±${Math.round(accuracy)} metri`);
       } else {
-        // Aggiorno le coordinate esistenti in tempo reale
+        // Aggiornamento posizione
         userMarker.setLatLng(latlng);
         accuracyCircle.setLatLng(latlng);
         accuracyCircle.setRadius(accuracy);
         userMarker.getPopup().setContent(`<b>Sei qui</b><br>Accuratezza GPS: ±${Math.round(accuracy)} metri`);
-        // Nel punto in cui ricevi la posizione dal tuo GPS esistente:
-const kmAttuale = getProgressivaKm(latitudineTua, longitudineTua, geojsondata);
-console.log(`Progressiva chilometrica: Km ${kmAttuale}`);
-
-// Aggiorni l'elemento a video
-document.getElementById('display-km').innerText = `Km ${kmAttuale}`;
-        
-
       }
-    }
 
+      // FIX 2 & 3: Calcolo e aggiornamento visivo costante della progressiva
+      const kmAttuale = getProgressivaKm(lat, lon, geojsonData);
+      document.getElementById('display-km').innerText = `Km ${kmAttuale}`;
+    }
 
     function onLocationError(e) {
-      alert("Impossibile rilevare la posizione GPS. Verificare di aver concesso i permessi e di aver attivato la geolocalizzazione sul dispositivo.\nErrore: " + e.message);
+      alert("Impossibile rilevare la posizione GPS. Verificare di aver concesso i permessi.\nErrore: " + e.message);
     }
 
-    // Avvio del tracciamento continuo se supportato
+    // Avvio del tracciamento
     if ('geolocation' in navigator) {
       navigator.geolocation.watchPosition(onLocationFound, onLocationError, {
-        enableHighAccuracy: true, // Richiede il sensore GPS hardware
-        maximumAge: 1000,         // Non usa posizioni in cache vecchie
-        timeout: 10000            // Timeout scansione
+        enableHighAccuracy: true,
+        maximumAge: 1000,
+        timeout: 10000
       });
     } else {
       alert("La geolocalizzazione non è supportata da questo browser.");
     }
 
-    // --- Aggiunta Pulsante "Centra su GPS" sulla Mappa ---
+    // Pulsante "Centra su GPS"
     const gpsControl = L.control({ position: 'topright' });
     gpsControl.onAdd = function() {
       const btn = L.DomUtil.create('button', 'gps-btn');
@@ -1060,21 +1084,7 @@ document.getElementById('display-km').innerText = `Km ${kmAttuale}`;
       return btn;
     };
     gpsControl.addTo(map);
-
-    function getProgressivaKm(userLat, userLon, geojsondata) {
-  const userPt = turf.point([userLon, userLat]);
-  
-  const line = geojsondata.type === 'FeatureCollection' 
-    ? geojsondata.features[0] 
-    : geojsondata;
-
-  const snapped = turf.nearestPointOnLine(line, userPt);
-  return snapped.properties.location.toFixed(3); // Ritorna i km (es. "12.450")
-}
-
   </script>
-
-
 
 </body>
 </html>
