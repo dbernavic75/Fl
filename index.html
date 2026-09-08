@@ -49,6 +49,8 @@
 
 
   <div id="map"></div>
+  <div id="display-km">Km --.---</div>
+  
 <!-- Inserisci questo blocco subito prima di </body> -->
 <div id="km-box" style="
   position: fixed; 
@@ -1034,6 +1036,12 @@
         // Nel punto in cui ricevi la posizione dal tuo GPS esistente:
 const kmAttuale = getProgressivaKm(latitudineTua, longitudineTua, geojsondata);
 console.log(`Progressiva chilometrica: Km ${kmAttuale}`);
+      // Calcoli la progressiva come prima
+const kmAttuale = getProgressivaKm(latitudineTua, longitudineTua, geojsondata);
+
+// Aggiorni l'elemento a video
+document.getElementById('display-km').innerText = `Km ${kmAttuale}`;
+        
 
       }
     }
