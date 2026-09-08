@@ -68,7 +68,9 @@
 </div>
   <!-- JS Leaflet -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+<!-- Inserisci Turf.js nell'head del tuo HTML se non lo hai già -->
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  
   <script>
     // Dichiarazione dell'oggetto GeoJSON
     const geojsonData = {
@@ -1029,8 +1031,13 @@
         accuracyCircle.setLatLng(latlng);
         accuracyCircle.setRadius(accuracy);
         userMarker.getPopup().setContent(`<b>Sei qui</b><br>Accuratezza GPS: ±${Math.round(accuracy)} metri`);
+        // Nel punto in cui ricevi la posizione dal tuo GPS esistente:
+const kmAttuale = getProgressivaKm(latitudineTua, longitudineTua, geojsondata);
+console.log(`Progressiva chilometrica: Km ${kmAttuale}`);
+
       }
     }
+
 
     function onLocationError(e) {
       alert("Impossibile rilevare la posizione GPS. Verificare di aver concesso i permessi e di aver attivato la geolocalizzazione sul dispositivo.\nErrore: " + e.message);
@@ -1064,6 +1071,18 @@
       return btn;
     };
     gpsControl.addTo(map);
+
+    function getProgressivaKm(userLat, userLon, geojsondata) {
+  const userPt = turf.point([userLon, userLat]);
+  
+  const line = geojsondata.type === 'FeatureCollection' 
+    ? geojsondata.features[0] 
+    : geojsondata;
+
+  const snapped = turf.nearestPointOnLine(line, userPt);
+  return snapped.properties.location.toFixed(3); // Ritorna i km (es. "12.450")
+}
+
   </script>
 
 
