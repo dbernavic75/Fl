@@ -49,23 +49,8 @@
 
 
   <div id="map"></div>
-<!-- Inserisci questo blocco subito prima di </body> -->
-<div id="km-box" style="
-  position: fixed; 
-  top: 15px; 
-  right: 15px; 
-  background: rgba(0, 0, 0, 0.85); 
-  color: #00ffcc; 
-  padding: 12px 20px; 
-  border-radius: 8px; 
-  font-family: monospace; 
-  font-size: 1.4rem; 
-  font-weight: bold;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
-  z-index: 9999;
-  text-align: center;">
-  KM: <span id="km-display">--+---</span>
-</div>
+  <div id="display-km">Km --.---</div>
+  
   <!-- JS Leaflet -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <!-- Inserisci Turf.js nell'head del tuo HTML se non lo hai già -->
@@ -1034,8 +1019,6 @@
         // Nel punto in cui ricevi la posizione dal tuo GPS esistente:
 const kmAttuale = getProgressivaKm(latitudineTua, longitudineTua, geojsondata);
 console.log(`Progressiva chilometrica: Km ${kmAttuale}`);
-      // Calcoli la progressiva come prima
-const kmAttuale = getProgressivaKm(latitudineTua, longitudineTua, geojsondata);
 
 // Aggiorni l'elemento a video
 document.getElementById('display-km').innerText = `Km ${kmAttuale}`;
