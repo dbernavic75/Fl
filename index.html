@@ -90,7 +90,6 @@
   </div>
   
   <div class="controls-container">
-    <button id="style-toggle-btn" class="gps-btn">🗺️ Vista: Schema Solo Tracciato</button>
     <button id="lock-btn" class="gps-btn active">🧭 Mappa Orientata: ON</button>
     <button id="recenter-btn" class="gps-btn">🎯 Centra Posizione</button>
   </div>
@@ -594,7 +593,7 @@
             [9.1812819, 45.6932619],
             [9.1815157, 45.6935089],
             [9.1819123, 45.6939335],
-            [9.2182515, 45.694297],
+            [9.1822515, 45.694297],
             [9.182342, 45.6943908],
             [9.1824554, 45.6945078],
             [9.182615, 45.694653],
@@ -756,7 +755,7 @@
             [9.2343148, 45.7711647],
             [9.234336, 45.7713379],
             [9.2343663, 45.7715186],
-            [9.234406, 45.7717476],
+            [9.2344406, 45.7717476],
             [9.2345369, 45.7719826],
             [9.2346445, 45.7721517],
             [9.2347714, 45.7723082],
@@ -999,29 +998,10 @@
       }
     };
 
-    // Definizioni degli Stili Mappa
-    const styleTrackOnly = {
-      version: 8,
-      sources: {},
-      layers: [
-        {
-          id: 'background',
-          type: 'background',
-          paint: {
-            'background-color': '#1e2530' // Fondo scuro neutro per la vista tracciato
-          }
-        }
-      ]
-    };
-
-    const styleFullCarto = 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json';
-
-    let isFullCarto = true; // Stato della vista (True = Cartografia Completa, False = Solo Tracciato)
-
     // Inizializzazione della Mappa Vettoriale MapLibre
     const map = new maplibregl.Map({
       container: 'map',
-      style: styleFullCarto,
+      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [9.20, 45.66],
       zoom: 12,
       pitch: 45 // Inclinazione della vista simil-navigatore
@@ -1036,84 +1016,61 @@
 
     let lastCoords = null;
 
-    // Funzione per registrare le sorgenti e i layer del tracciato
-    function setupRouteLayers() {
-      if (!map.getSource('route')) {
-        map.addSource('route', {
-          'type': 'geojson',
-          'data': geojsonData
-        });
-
-        map.addLayer({
-          'id': 'route-line',
-          'type': 'line',
-          'source': 'route',
-          'layout': {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          'paint': {
-            'line-color': isFullCarto ? '#0066cc' : '#00ccff', // Linea più visibile a seconda dello sfondo
-            'line-width': 5,
-            'line-opacity': 0.9
-          }
-        });
-      }
-
-      if (!map.getSource('gps-accuracy')) {
-        map.addSource('gps-accuracy', {
-          'type': 'geojson',
-          'data': {
-            'type': 'FeatureCollection',
-            'features': []
-          }
-        });
-
-        map.addLayer({
-          'id': 'gps-accuracy-fill',
-          'type': 'fill',
-          'source': 'gps-accuracy',
-          'paint': {
-            'fill-color': '#0078FF',
-            'fill-opacity': 0.15
-          }
-        });
-
-        map.addLayer({
-          'id': 'gps-accuracy-outline',
-          'type': 'line',
-          'source': 'gps-accuracy',
-          'paint': {
-            'line-color': '#0078FF',
-            'line-width': 1,
-            'line-opacity': 0.4
-          }
-        });
-      }
-    }
-
     map.on('load', () => {
-      setupRouteLayers();
+      // Caricamento del tracciato GeoJSON
+      map.addSource('route', {
+        'type': 'geojson',
+        'data': geojsonData
+      });
+
+      map.addLayer({
+        'id': 'route-line',
+        'type': 'line',
+        'source': 'route',
+        'layout': {
+          'line-join': 'round',
+          'line-cap': 'round'
+        },
+        'paint': {
+          'line-color': '#0066cc',
+          'line-width': 5,
+          'line-opacity': 0.8
+        }
+      });
+
+      // Sorgente e Layer per il Cerchio di Accuratezza GPS
+      map.addSource('gps-accuracy', {
+        'type': 'geojson',
+        'data': {
+          'type': 'FeatureCollection',
+          'features': []
+        }
+      });
+
+      map.addLayer({
+        'id': 'gps-accuracy-fill',
+        'type': 'fill',
+        'source': 'gps-accuracy',
+        'paint': {
+          'fill-color': '#0078FF',
+          'fill-opacity': 0.15
+        }
+      });
+
+      map.addLayer({
+        'id': 'gps-accuracy-outline',
+        'type': 'line',
+        'source': 'gps-accuracy',
+        'paint': {
+          'line-color': '#0078FF',
+          'line-width': 1,
+          'line-opacity': 0.4
+        }
+      });
+
+      // Adattamento della vista iniziale al percorso
       const bbox = turf.bbox(geojsonData);
       map.fitBounds(bbox, { padding: 40 });
-    });
-
-    // Re-inietta i layer quando cambia lo stile della mappa
-    map.on('styledata', () => {
-      setupRouteLayers();
-    });
-
-    // Gestione Cambiamento Vista (Schema Tracciato vs Cartografia Completa)
-    const styleToggleBtn = document.getElementById('style-toggle-btn');
-    styleToggleBtn.addEventListener('click', () => {
-      isFullCarto = !isFullCarto;
-      if (isFullCarto) {
-        map.setStyle(styleFullCarto);
-        styleToggleBtn.innerText = '🗺️ Vista: Schema Solo Tracciato';
-      } else {
-        map.setStyle(styleTrackOnly);
-        styleToggleBtn.innerText = '🗺️ Vista: Cartografia Completa';
-      }
     });
 
     // Funzione Calcolo della Progressiva KM (Turf.js)
