@@ -995,12 +995,8 @@
       pitch: 45 // Inclinazione della vista simil-navigatore
     });
 
-    // Blocco delle rotazioni e interazioni manuali con la mappa
-    map.dragRotate.disable();
-    map.touchZoomRotate.disableRotation();
-
     let followMode = true;
-    let isInitialCentered = false; // Traccia la prima centratura all'avvio
+    let lastBearing = 0; // Memorizza l'ultima direzione valida
     let userMarkerElement = document.createElement('div');
     userMarkerElement.className = 'user-dot-marker';
     
@@ -1056,44 +1052,43 @@
       const kmAttuale = getProgressivaKm(lat, lon, geojsonData);
       document.getElementById('display-km').innerText = `Km ${kmAttuale}`;
 
-      let bearing = map.getBearing();
-
       // Determinazione dell'orientamento di marcia
       if (heading !== null && !isNaN(heading)) {
-        bearing = heading;
+        lastBearing = heading;
       } else if (lastCoords) {
-        // Calcola l'angolo in base ai movimenti precedenti se il dispositivo non fornisce il campo heading
-        bearing = turf.bearing(
+        const dist = turf.distance(
           turf.point([lastCoords.lon, lastCoords.lat]),
-          turf.point([lon, lat])
+          turf.point([lon, lat]),
+          { units: 'meters' }
         );
+        // Aggiorna l'orientamento solo se ci si è spostati di almeno 2 metri (evita rotazioni da fermo/rumore GPS)
+        if (dist > 2) {
+          lastBearing = turf.bearing(
+            turf.point([lastCoords.lon, lastCoords.lat]),
+            turf.point([lon, lat])
+          );
+        }
       }
 
-      // Prepara le opzioni di transizione della mappa
-      const easeOptions = {
-        duration: 1000
-      };
-
-      // Ruota la mappa mantenendo la direzione se la modalità orientata è attiva
+      // Mantiene la mappa orientata alla direzione di marcia dell'utente senza forzare il ricentraggio
       if (followMode) {
-        easeOptions.bearing = bearing;
+        map.easeTo({
+          bearing: lastBearing, // La mappa ruota mantenendo in alto l'ultima direzione conosciuta
+          duration: 1000
+        });
       }
-
-      // Centra solo al primo posizionamento GPS rilevato all'avvio dell'applicazione
-      if (!isInitialCentered) {
-        easeOptions.center = [lon, lat];
-        easeOptions.zoom = 15;
-        isInitialCentered = true;
-      }
-
-      // Esegue la transizione di movimento/rotazione
-      map.easeTo(easeOptions);
 
       lastCoords = { lat, lon };
     }
 
     function onLocationError(e) {
-      alert("Impossibile rilevare la posizione GPS. Verificare i permessi del dispositivo.");
+      // Se si perde il segnale GPS, la mappa orientata mantiene comunque l'ultimo bearing conosciuto
+      if (followMode) {
+        map.easeTo({
+          bearing: lastBearing,
+          duration: 1000
+        });
+      }
     }
 
     // Avvio del tracciamento in tempo reale
@@ -1112,19 +1107,23 @@
       if (followMode) {
         lockBtn.classList.add('active');
         lockBtn.innerText = '🧭 Mappa Orientata: ON';
+        map.easeTo({
+          bearing: lastBearing,
+          duration: 1000
+        });
       } else {
         lockBtn.classList.remove('active');
         lockBtn.innerText = '🧭 Mappa Orientata: OFF';
-        map.easeTo({ bearing: 0, duration: 1000 }); // Resetta il nord in alto
       }
     });
 
-    // Gestione Pulsante Centra Posizione
+    // Gestione Pulsante Centra Posizione (Effettua il riposizionamento al centro)
     const recenterBtn = document.getElementById('recenter-btn');
     recenterBtn.addEventListener('click', () => {
       if (lastCoords) {
         map.flyTo({
           center: [lastCoords.lon, lastCoords.lat],
+          bearing: lastBearing,
           zoom: 15,
           essential: true
         });
