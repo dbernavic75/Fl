@@ -799,7 +799,7 @@
             [9.2418203, 45.7848972],
             [9.2407818, 45.7852983],
             [9.2403784, 45.7855018],
-            [9.2400885, 45.7856498],
+            [9.240885, 45.7856498],
             [9.239869, 45.785811],
             [9.2396844, 45.785979],
             [9.2394109, 45.7862607],
@@ -1070,10 +1070,11 @@
         }
       }
 
-      // Mantiene la mappa orientata alla direzione di marcia dell'utente senza forzare il ricentraggio
+      // Mantiene la mappa centrata sulla posizione dell'utente e orientata alla direzione di marcia (Stile Google Maps)
       if (followMode) {
         map.easeTo({
-          bearing: lastBearing, // La mappa ruota mantenendo in alto l'ultima direzione conosciuta
+          center: [lon, lat],
+          bearing: lastBearing, // La mappa ruota mantenendo in alto la direzione di marcia
           duration: 1000
         });
       }
@@ -1082,9 +1083,10 @@
     }
 
     function onLocationError(e) {
-      // Se si perde il segnale GPS, la mappa orientata mantiene comunque l'ultimo bearing conosciuto
-      if (followMode) {
+      // Se si perde il segnale GPS e si trova in followMode, mantiene il centro e il bearing conosciuto
+      if (followMode && lastCoords) {
         map.easeTo({
+          center: [lastCoords.lon, lastCoords.lat],
           bearing: lastBearing,
           duration: 1000
         });
@@ -1107,10 +1109,13 @@
       if (followMode) {
         lockBtn.classList.add('active');
         lockBtn.innerText = '🧭 Mappa Orientata: ON';
-        map.easeTo({
-          bearing: lastBearing,
-          duration: 1000
-        });
+        if (lastCoords) {
+          map.easeTo({
+            center: [lastCoords.lon, lastCoords.lat],
+            bearing: lastBearing,
+            duration: 1000
+          });
+        }
       } else {
         lockBtn.classList.remove('active');
         lockBtn.innerText = '🧭 Mappa Orientata: OFF';
