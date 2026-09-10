@@ -995,7 +995,12 @@
       pitch: 45 // Inclinazione della vista simil-navigatore
     });
 
+    // Blocco delle rotazioni e interazioni manuali con la mappa
+    map.dragRotate.disable();
+    map.touchZoomRotate.disableRotation();
+
     let followMode = true;
+    let isInitialCentered = false; // Traccia la prima centratura all'avvio
     let userMarkerElement = document.createElement('div');
     userMarkerElement.className = 'user-dot-marker';
     
@@ -1051,7 +1056,7 @@
       const kmAttuale = getProgressivaKm(lat, lon, geojsonData);
       document.getElementById('display-km').innerText = `Km ${kmAttuale}`;
 
-      let bearing = 0;
+      let bearing = map.getBearing();
 
       // Determinazione dell'orientamento di marcia
       if (heading !== null && !isNaN(heading)) {
@@ -1064,14 +1069,25 @@
         );
       }
 
-      // Mantiene la mappa ruotata verso la direzione di marcia dell'utente se abilitata
+      // Prepara le opzioni di transizione della mappa
+      const easeOptions = {
+        duration: 1000
+      };
+
+      // Ruota la mappa mantenendo la direzione se la modalità orientata è attiva
       if (followMode) {
-        map.easeTo({
-          center: [lon, lat],
-          bearing: bearing, // La mappa ruota mantenendo in alto la direzione di marcia
-          duration: 1000
-        });
+        easeOptions.bearing = bearing;
       }
+
+      // Centra solo al primo posizionamento GPS rilevato all'avvio dell'applicazione
+      if (!isInitialCentered) {
+        easeOptions.center = [lon, lat];
+        easeOptions.zoom = 15;
+        isInitialCentered = true;
+      }
+
+      // Esegue la transizione di movimento/rotazione
+      map.easeTo(easeOptions);
 
       lastCoords = { lat, lon };
     }
@@ -1099,6 +1115,7 @@
       } else {
         lockBtn.classList.remove('active');
         lockBtn.innerText = '🧭 Mappa Orientata: OFF';
+        map.easeTo({ bearing: 0, duration: 1000 }); // Resetta il nord in alto
       }
     });
 
