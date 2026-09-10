@@ -20,17 +20,11 @@
       padding: 0;
     }
 
-    .info-container {
+    #display-km {
       position: absolute;
       bottom: 20px;
       left: 20px;
       z-index: 10;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    #display-km {
       background-color: rgba(255, 255, 255, 0.95);
       border: 2px solid #0066cc;
       border-radius: 8px;
@@ -40,18 +34,15 @@
       font-size: 18px;
       color: #333333;
       box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     }
 
-    #display-accuracy {
-      background-color: rgba(255, 255, 255, 0.9);
-      border: 1px solid #666;
-      border-radius: 6px;
-      padding: 4px 8px;
-      font-family: Arial, sans-serif;
+    .accuracy-info {
       font-size: 12px;
-      color: #555;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
-      width: fit-content;
+      color: #666666;
+      font-weight: normal;
     }
 
     .controls-container {
@@ -93,10 +84,9 @@
 <body>
 
   <div id="map"></div>
-  
-  <div class="info-container">
-    <div id="display-km">Km --.---</div>
-    <div id="display-accuracy">Precisione GPS: -- m</div>
+  <div id="display-km">
+    <div id="km-text">Km --.---</div>
+    <div id="accuracy-text" class="accuracy-info">Accuratezza GPS: -- m</div>
   </div>
   
   <div class="controls-container">
@@ -157,7 +147,7 @@
             [9.1660919, 45.4773636],
             [9.1658806, 45.4775923],
             [9.1655849, 45.4778977],
-            [9.1652496, 45.482231],
+            [9.1652496, 45.4782231],
             [9.1648507, 45.4785985],
             [9.1642042, 45.4792172],
             [9.164042, 45.4793751],
@@ -507,7 +497,7 @@
             [9.1407974, 45.6517989],
             [9.1408894, 45.651904],
             [9.1409531, 45.6519733],
-            [9.1410487, 45.6520661],
+            [9.140487, 45.6520661],
             [9.1411655, 45.6521774],
             [9.1412681, 45.652264],
             [9.1413814, 45.6523555],
@@ -1008,43 +998,26 @@
       }
     };
 
-    const lockBtn = document.getElementById('lock-btn');
-    const recenterBtn = document.getElementById('recenter-btn');
-
-    // Inizializzazione Mappa MapLibre
+    // Inizializzazione della Mappa Vettoriale MapLibre
     const map = new maplibregl.Map({
       container: 'map',
       style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [9.20, 45.66],
       zoom: 12,
-      pitch: 45
+      pitch: 45 // Inclinazione della vista simil-navigatore
     });
 
     let followMode = true;
-    let lastBearing = 0;
-    let lastCoords = null;
-
+    let lastBearing = 0; // Memorizza l'ultima direzione valida
     let userMarkerElement = document.createElement('div');
     userMarkerElement.className = 'user-dot-marker';
+    
     let userMarker = new maplibregl.Marker({ element: userMarkerElement }).setLngLat([9.20, 45.66]).addTo(map);
 
-    // Disattiva la modalità inseguimento automatico al primo spostamento manuale
-    function stopFollowMode() {
-      if (followMode) {
-        followMode = false;
-        lockBtn.classList.remove('active');
-        lockBtn.innerText = '🧭 Mappa Orientata: OFF';
-      }
-    }
-
-    map.on('dragstart', stopFollowMode);
-    map.on('pitchstart', stopFollowMode);
-    map.on('rotatestart', stopFollowMode);
-    map.on('zoomstart', stopFollowMode);
-    map.on('touchstart', stopFollowMode);
+    let lastCoords = null;
 
     map.on('load', () => {
-      // Tracciato del percorso GeoJSON
+      // Caricamento del tracciato GeoJSON
       map.addSource('route', {
         'type': 'geojson',
         'data': geojsonData
@@ -1065,10 +1038,13 @@
         }
       });
 
-      // Sorgente e Layer per il cerchio del livello di precisione GPS
+      // Sorgente e Layer per il Cerchio di Accuratezza GPS
       map.addSource('gps-accuracy', {
         'type': 'geojson',
-        'data': turf.featureCollection([])
+        'data': {
+          'type': 'FeatureCollection',
+          'features': []
+        }
       });
 
       map.addLayer({
@@ -1088,14 +1064,16 @@
         'paint': {
           'line-color': '#0078FF',
           'line-width': 1,
-          'line-opacity': 0.5
+          'line-opacity': 0.4
         }
       });
 
+      // Adattamento della vista iniziale al percorso
       const bbox = turf.bbox(geojsonData);
       map.fitBounds(bbox, { padding: 40 });
     });
 
+    // Funzione Calcolo della Progressiva KM (Turf.js)
     function getProgressivaKm(userLat, userLon, data) {
       const userPt = turf.point([userLon, userLat]);
       const mainBranchCoords = data.geometry.coordinates[0];
@@ -1104,28 +1082,31 @@
       return snapped.properties.location.toFixed(3);
     }
 
+    // Gestione aggiornamenti Posizione e Orientamento
     function onLocationFound(e) {
       const lat = e.coords.latitude;
       const lon = e.coords.longitude;
-      const heading = e.coords.heading;
+      const heading = e.coords.heading; // Heading GPS (in gradi)
       const accuracy = e.coords.accuracy; // Precisione GPS in metri
 
       userMarker.setLngLat([lon, lat]);
 
-      // Disegna il cerchio di precisione GPS usando Turf.js (se la sorgente è caricata)
-      if (map.getSource('gps-accuracy')) {
-        const accuracyPoly = turf.buffer(turf.point([lon, lat]), accuracy, { units: 'meters' });
-        map.getSource('gps-accuracy').setData(accuracyPoly);
+      // Calcolo e aggiornamento visivo della progressiva e accuratezza
+      const kmAttuale = getProgressivaKm(lat, lon, geojsonData);
+      document.getElementById('km-text').innerText = `Km ${kmAttuale}`;
+      
+      if (accuracy !== undefined && accuracy !== null) {
+        document.getElementById('accuracy-text').innerText = `Accuratezza GPS: ±${Math.round(accuracy)} m`;
+
+        // Genera il poligono circolare con Turf.js per la precisione GPS
+        const circleFeature = turf.buffer(turf.point([lon, lat]), accuracy, { units: 'meters' });
+        
+        if (map.getSource('gps-accuracy')) {
+          map.getSource('gps-accuracy').setData(circleFeature);
+        }
       }
 
-      // Aggiorna indicatore di precisione numerico
-      document.getElementById('display-accuracy').innerText = `Precisione GPS: ±${Math.round(accuracy)} m`;
-
-      // Calcolo progressiva
-      const kmAttuale = getProgressivaKm(lat, lon, geojsonData);
-      document.getElementById('display-km').innerText = `Km ${kmAttuale}`;
-
-      // Calcolo dell'orientamento
+      // Determinazione dell'orientamento di marcia
       if (heading !== null && !isNaN(heading)) {
         lastBearing = heading;
       } else if (lastCoords) {
@@ -1134,6 +1115,7 @@
           turf.point([lon, lat]),
           { units: 'meters' }
         );
+        // Aggiorna l'orientamento solo se ci si è spostati di almeno 2 metri (evita rotazioni da fermo/rumore GPS)
         if (dist > 2) {
           lastBearing = turf.bearing(
             turf.point([lastCoords.lon, lastCoords.lat]),
@@ -1142,11 +1124,11 @@
         }
       }
 
-      // Aggiornamento vista solo se la modalità insegguimento è ATTIVA
+      // Mantiene la mappa centrata sulla posizione dell'utente e orientata alla direzione di marcia (Stile Google Maps)
       if (followMode) {
         map.easeTo({
           center: [lon, lat],
-          bearing: lastBearing,
+          bearing: lastBearing, // La mappa ruota mantenendo in alto la direzione di marcia
           duration: 1000
         });
       }
@@ -1155,6 +1137,7 @@
     }
 
     function onLocationError(e) {
+      // Se si perde il segnale GPS e si trova in followMode, mantiene il centro e il bearing conosciuto
       if (followMode && lastCoords) {
         map.easeTo({
           center: [lastCoords.lon, lastCoords.lat],
@@ -1164,6 +1147,7 @@
       }
     }
 
+    // Avvio del tracciamento in tempo reale
     if ('geolocation' in navigator) {
       navigator.geolocation.watchPosition(onLocationFound, onLocationError, {
         enableHighAccuracy: true,
@@ -1172,7 +1156,8 @@
       });
     }
 
-    // Toggle manuale del pulsante Lock
+    // Gestione Lock/Sblocco Mappa Orientata
+    const lockBtn = document.getElementById('lock-btn');
     lockBtn.addEventListener('click', () => {
       followMode = !followMode;
       if (followMode) {
@@ -1191,11 +1176,9 @@
       }
     });
 
-    // Ripristina l'inseguimento e ri-centra la mappa
+    // Gestione Pulsante Centra Posizione (Effettua il riposizionamento al centro)
+    const recenterBtn = document.getElementById('recenter-btn');
     recenterBtn.addEventListener('click', () => {
-      followMode = true;
-      lockBtn.classList.add('active');
-      lockBtn.innerText = '🧭 Mappa Orientata: ON';
       if (lastCoords) {
         map.flyTo({
           center: [lastCoords.lon, lastCoords.lat],
