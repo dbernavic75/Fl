@@ -61,13 +61,14 @@
       color: white;
     }
 
-    /* Marker Freccia Direzionale */
-    .user-arrow-marker {
-      width: 30px;
-      height: 30px;
-      background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%230078FF" stroke="white" stroke-width="2"><path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z"/></svg>');
-      background-size: cover;
-      transition: transform 0.2s ease-out;
+    /* Marker Cerchietto ad alto contrasto */
+    .user-dot-marker {
+      width: 16px;
+      height: 16px;
+      background-color: #FF0055;
+      border: 3px solid #FFFFFF;
+      border-radius: 50%;
+      box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
     }
   </style>
 </head>
@@ -78,6 +79,7 @@
   
   <div class="controls-container">
     <button id="lock-btn" class="gps-btn active">🧭 Mappa Orientata: ON</button>
+    <button id="recenter-btn" class="gps-btn">🎯 Centra Posizione</button>
   </div>
   
   <!-- MapLibre GL e Turf.js -->
@@ -964,7 +966,7 @@
             [9.2713069, 45.8531098],
             [9.2712791, 45.8531585],
             [9.2711492, 45.8533859],
-            [9.271069, 45.8535086],
+            [9.27069, 45.8535086],
             [9.2709909, 45.8536184],
             [9.2708933, 45.8537335],
             [9.270777, 45.8538541],
@@ -995,7 +997,7 @@
 
     let followMode = true;
     let userMarkerElement = document.createElement('div');
-    userMarkerElement.className = 'user-arrow-marker';
+    userMarkerElement.className = 'user-dot-marker';
     
     let userMarker = new maplibregl.Marker({ element: userMarkerElement }).setLngLat([9.20, 45.66]).addTo(map);
 
@@ -1062,10 +1064,7 @@
         );
       }
 
-      // Orientamento della freccia marker
-      userMarkerElement.style.transform = `rotate(${bearing}deg)`;
-
-      // Mantiene la mappa ruotata verso la direzione di marcia dell'utente
+      // Mantiene la mappa ruotata verso la direzione di marcia dell'utente se abilitata
       if (followMode) {
         map.easeTo({
           center: [lon, lat],
@@ -1103,12 +1102,15 @@
       }
     });
 
-    // Disattiva il tracciamento dinamico in caso di trascinamento manuale della mappa
-    map.on('dragstart', () => {
-      if (followMode) {
-        followMode = false;
-        lockBtn.classList.remove('active');
-        lockBtn.innerText = '🧭 Mappa Orientata: OFF';
+    // Gestione Pulsante Centra Posizione
+    const recenterBtn = document.getElementById('recenter-btn');
+    recenterBtn.addEventListener('click', () => {
+      if (lastCoords) {
+        map.flyTo({
+          center: [lastCoords.lon, lastCoords.lat],
+          zoom: 15,
+          essential: true
+        });
       }
     });
   </script>
