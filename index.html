@@ -79,6 +79,31 @@
       border-radius: 50%;
       box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
     }
+
+    /* Stile personalizzato per il Popup del punto toccato */
+    .custom-km-popup .maplibregl-popup-content {
+      background-color: #0066cc;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      font-size: 15px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+      text-align: center;
+    }
+    .custom-km-popup .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+      border-top-color: #0066cc;
+    }
+    .custom-km-popup .maplibregl-popup-anchor-top .maplibregl-popup-tip {
+      border-bottom-color: #0066cc;
+    }
+    .custom-km-popup .maplibregl-popup-anchor-left .maplibregl-popup-tip {
+      border-right-color: #0066cc;
+    }
+    .custom-km-popup .maplibregl-popup-anchor-right .maplibregl-popup-tip {
+      border-left-color: #0066cc;
+    }
   </style>
 </head>
 <body>
@@ -541,7 +566,7 @@
             [9.1577943, 45.6615677],
             [9.1578482, 45.661601],
             [9.1579122, 45.6616403],
-            [9.1579819, 45.6616836],
+            [9.1579819, 45.661836],
             [9.1580691, 45.6617377],
             [9.1581777, 45.6618049],
             [9.1583151, 45.6618897],
@@ -670,7 +695,6 @@
             [9.2187618, 45.7376413],
             [9.2190116, 45.7378655],
             [9.2193418, 45.7381225],
-            [9.2197763, 45.7384027],
             [9.2216224, 45.7392436],
             [9.2219461, 45.7393861],
             [9.2233709, 45.7400135],
@@ -1015,6 +1039,8 @@
     let userMarker = new maplibregl.Marker({ element: userMarkerElement }).setLngLat([9.20, 45.66]).addTo(map);
 
     let lastCoords = null;
+    let currentClickPopup = null;
+    let popupTimer = null;
 
     map.on('load', () => {
       // Caricamento del tracciato GeoJSON
@@ -1079,8 +1105,51 @@
       const mainBranchCoords = data.geometry.coordinates[0];
       const mainLine = turf.lineString(mainBranchCoords);
       const snapped = turf.nearestPointOnLine(mainLine, userPt);
-      return snapped.properties.location.toFixed(3);
+      return {
+        km: snapped.properties.location.toFixed(3),
+        snappedCoords: snapped.geometry.coordinates
+      };
     }
+
+    // Gestione del Tocco / Click sul Tracciato
+    map.on('click', 'route-line', (e) => {
+      const clickLat = e.lngLat.lat;
+      const clickLon = e.lngLat.lng;
+
+      // Calcola la progressiva e il punto esatto proiettato sulla linea
+      const result = getProgressivaKm(clickLat, clickLon, geojsonData);
+
+      // Cancella l'eventuale timer o popup precedente attivo
+      if (popupTimer) clearTimeout(popupTimer);
+      if (currentClickPopup) currentClickPopup.remove();
+
+      // Crea e mostra il nuovo Popup
+      currentClickPopup = new maplibregl.Popup({
+        className: 'custom-km-popup',
+        closeButton: false,
+        closeOnClick: false,
+        offset: 10
+      })
+        .setLngLat(result.snappedCoords)
+        .setHTML(`Km ${result.km}`)
+        .addTo(map);
+
+      // Imposta il timer per rimuovere il popup dopo 5 secondi (5000 ms)
+      popupTimer = setTimeout(() => {
+        if (currentClickPopup) {
+          currentClickPopup.remove();
+          currentClickPopup = null;
+        }
+      }, 5000);
+    });
+
+    // Cambia il cursore al passaggio sul tracciato
+    map.on('mouseenter', 'route-line', () => {
+      map.getCanvas().style.cursor = 'pointer';
+    });
+    map.on('mouseleave', 'route-line', () => {
+      map.getCanvas().style.cursor = '';
+    });
 
     // Gestione aggiornamenti Posizione e Orientamento
     function onLocationFound(e) {
@@ -1092,8 +1161,8 @@
       userMarker.setLngLat([lon, lat]);
 
       // Calcolo e aggiornamento visivo della progressiva e accuratezza
-      const kmAttuale = getProgressivaKm(lat, lon, geojsonData);
-      document.getElementById('km-text').innerText = `Km ${kmAttuale}`;
+      const resultGps = getProgressivaKm(lat, lon, geojsonData);
+      document.getElementById('km-text').innerText = `Km ${resultGps.km}`;
       
       if (accuracy !== undefined && accuracy !== null) {
         document.getElementById('accuracy-text').innerText = `Accuratezza GPS: ±${Math.round(accuracy)} m`;
