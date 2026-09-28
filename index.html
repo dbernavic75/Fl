@@ -124,7 +124,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   
   <script>
-    let geojsonData = null;
+    let geojsonList = []; // Mantiene la lista dei file GeoJSON caricati separatamente
 
     // Inizializzazione della Mappa Vettoriale MapLibre
     const map = new maplibregl.Map({
@@ -147,7 +147,7 @@
     let popupTimer = null;
 
     map.on('load', () => {
-      // Caricamento asincrono di entrambi i file GeoJSON (r16 e r17)
+      // Caricamento asincrono separato dei file GeoJSON
       Promise.all([
         fetch('geojson/r16.geojson').then(res => {
           if (!res.ok) throw new Error('Errore nel caricamento di r16.geojson');
@@ -159,19 +159,20 @@
         })
       ])
       .then(([data16, data17]) => {
-        // Unione delle feature dei due file in una singola FeatureCollection
+        geojsonList = [data16, data17];
+
+        // Creiamo una FeatureCollection unificata SOLO per la visualizzazione grafica sul layer
         const features16 = data16.type === 'FeatureCollection' ? data16.features : [data16];
         const features17 = data17.type === 'FeatureCollection' ? data17.features : [data17];
 
-        geojsonData = {
+        const visualCollection = {
           type: 'FeatureCollection',
           features: [...features16, ...features17]
         };
 
-        // Caricamento del tracciato GeoJSON unificato sulla mappa
         map.addSource('route', {
           'type': 'geojson',
-          'data': geojsonData
+          'data': visualCollection
         });
 
         map.addLayer({
@@ -189,8 +190,8 @@
           }
         });
 
-        // Adattamento della vista iniziale al perimetro di tutti i tracciati
-        const bbox = turf.bbox(geojsonData);
+        // Adattamento della vista iniziale a entrambe le linee
+        const bbox = turf.bbox(visualCollection);
         map.fitBounds(bbox, { padding: 40 });
       })
       .catch(error => {
@@ -228,36 +229,55 @@
       });
     });
 
-    // Funzione Calcolo della Progressiva KM (Turf.js) supporta FeatureCollection e MultiLineString
-    function getProgressivaKm(userLat, userLon, data) {
-      if (!data) return { km: '--.---', snappedCoords: [userLon, userLat] };
+    // Funzione Calcolo della Progressiva KM indipendente per ogni linea
+    function getProgressivaKm(userLat, userLon, list) {
+      if (!list || list.length === 0) return { km: '--.---', snappedCoords: [userLon, userLat] };
       
       const userPt = turf.point([userLon, userLat]);
-      const combined = turf.combine(data);
-      const combinedLine = combined.features[0];
+      let closestResult = null;
+      let minDistance = Infinity;
 
-      const snapped = turf.nearestPointOnLine(combinedLine, userPt);
-      return {
-        km: snapped.properties.location ? snapped.properties.location.toFixed(3) : '--.---',
-        snappedCoords: snapped.geometry.coordinates
-      };
+      // Scansiona ciascun tracciato separatamente mantenendo la propria origine
+      list.forEach(data => {
+        let lineGeom;
+        if (data.type === 'FeatureCollection') {
+          const coords = data.features[0].geometry.coordinates;
+          lineGeom = turf.lineString(coords[0] || coords);
+        } else if (data.geometry.type === 'MultiLineString') {
+          lineGeom = turf.lineString(data.geometry.coordinates[0]);
+        } else {
+          lineGeom = turf.lineString(data.geometry.coordinates);
+        }
+
+        const snapped = turf.nearestPointOnLine(lineGeom, userPt);
+        const distFromUser = snapped.properties.dist; // Distanza in km dal punto di click/utente alla linea
+
+        // Trova la linea più vicina al punto selezionato/GPS
+        if (distFromUser < minDistance) {
+          minDistance = distFromUser;
+          closestResult = {
+            km: snapped.properties.location ? snapped.properties.location.toFixed(3) : '--.---',
+            snappedCoords: snapped.geometry.coordinates
+          };
+        }
+      });
+
+      return closestResult || { km: '--.---', snappedCoords: [userLon, userLat] };
     }
 
     // Gestione del Tocco / Click sul Tracciato
     map.on('click', 'route-line', (e) => {
-      if (!geojsonData) return;
+      if (geojsonList.length === 0) return;
 
       const clickLat = e.lngLat.lat;
       const clickLon = e.lngLat.lng;
 
-      // Calcola la progressiva e il punto esatto proiettato sulla linea
-      const result = getProgressivaKm(clickLat, clickLon, geojsonData);
+      // Calcola la progressiva rispetto alla sola linea più vicina al punto cliccato
+      const result = getProgressivaKm(clickLat, clickLon, geojsonList);
 
-      // Cancella l'eventuale timer o popup precedente attivo
       if (popupTimer) clearTimeout(popupTimer);
       if (currentClickPopup) currentClickPopup.remove();
 
-      // Crea e mostra il nuovo Popup
       currentClickPopup = new maplibregl.Popup({
         className: 'custom-km-popup',
         closeButton: false,
@@ -268,7 +288,6 @@
         .setHTML(`Km ${result.km}`)
         .addTo(map);
 
-      // Imposta il timer per rimuovere il popup dopo 5 secondi (5000 ms)
       popupTimer = setTimeout(() => {
         if (currentClickPopup) {
           currentClickPopup.remove();
@@ -277,7 +296,6 @@
       }, 5000);
     });
 
-    // Cambia il cursore al passaggio sul tracciato
     map.on('mouseenter', 'route-line', () => {
       map.getCanvas().style.cursor = 'pointer';
     });
@@ -289,21 +307,19 @@
     function onLocationFound(e) {
       const lat = e.coords.latitude;
       const lon = e.coords.longitude;
-      const heading = e.coords.heading; // Heading GPS (in gradi)
-      const accuracy = e.coords.accuracy; // Precisione GPS in metri
+      const heading = e.coords.heading;
+      const accuracy = e.coords.accuracy;
 
       userMarker.setLngLat([lon, lat]);
 
-      // Calcolo e aggiornamento visivo della progressiva e accuratezza
-      if (geojsonData) {
-        const resultGps = getProgressivaKm(lat, lon, geojsonData);
+      if (geojsonList.length > 0) {
+        const resultGps = getProgressivaKm(lat, lon, geojsonList);
         document.getElementById('km-text').innerText = `Km ${resultGps.km}`;
       }
       
       if (accuracy !== undefined && accuracy !== null) {
         document.getElementById('accuracy-text').innerText = `Accuratezza GPS: ±${Math.round(accuracy)} m`;
 
-        // Genera il poligono circolare con Turf.js per la precisione GPS
         const circleFeature = turf.buffer(turf.point([lon, lat]), accuracy, { units: 'meters' });
         
         if (map.getSource('gps-accuracy')) {
@@ -311,7 +327,6 @@
         }
       }
 
-      // Determinazione dell'orientamento di marcia
       if (heading !== null && !isNaN(heading)) {
         lastBearing = heading;
       } else if (lastCoords) {
@@ -320,7 +335,6 @@
           turf.point([lon, lat]),
           { units: 'meters' }
         );
-        // Aggiorna l'orientamento solo se ci si è spostati di almeno 2 metri
         if (dist > 2) {
           lastBearing = turf.bearing(
             turf.point([lastCoords.lon, lastCoords.lat]),
@@ -329,7 +343,6 @@
         }
       }
 
-      // Mantiene la mappa centrata sulla posizione dell'utente e orientata alla direzione di marcia
       if (followMode) {
         map.easeTo({
           center: [lon, lat],
@@ -351,7 +364,6 @@
       }
     }
 
-    // Avvio del tracciamento in tempo reale
     if ('geolocation' in navigator) {
       navigator.geolocation.watchPosition(onLocationFound, onLocationError, {
         enableHighAccuracy: true,
@@ -360,7 +372,6 @@
       });
     }
 
-    // Gestione Lock/Sblocco Mappa Orientata
     const lockBtn = document.getElementById('lock-btn');
     lockBtn.addEventListener('click', () => {
       followMode = !followMode;
@@ -380,7 +391,6 @@
       }
     });
 
-    // Gestione Pulsante Centra Posizione
     const recenterBtn = document.getElementById('recenter-btn');
     recenterBtn.addEventListener('click', () => {
       if (lastCoords) {
