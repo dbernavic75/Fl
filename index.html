@@ -147,45 +147,55 @@
     let popupTimer = null;
 
     map.on('load', () => {
-      // Caricamento asincrono del file GeoJSON esterno
-      fetch('geojson/r16.geojson')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('Errore nel caricamento del file GeoJSON: ' + response.statusText);
-          }
-          return response.json();
+      // Caricamento asincrono di entrambi i file GeoJSON (r16 e r17)
+      Promise.all([
+        fetch('geojson/r16.geojson').then(res => {
+          if (!res.ok) throw new Error('Errore nel caricamento di r16.geojson');
+          return res.json();
+        }),
+        fetch('geojson/r17.geojson').then(res => {
+          if (!res.ok) throw new Error('Errore nel caricamento di r17.geojson');
+          return res.json();
         })
-        .then(data => {
-          geojsonData = data;
+      ])
+      .then(([data16, data17]) => {
+        // Unione delle feature dei due file in una singola FeatureCollection
+        const features16 = data16.type === 'FeatureCollection' ? data16.features : [data16];
+        const features17 = data17.type === 'FeatureCollection' ? data17.features : [data17];
 
-          // Caricamento del tracciato GeoJSON sulla mappa
-          map.addSource('route', {
-            'type': 'geojson',
-            'data': geojsonData
-          });
+        geojsonData = {
+          type: 'FeatureCollection',
+          features: [...features16, ...features17]
+        };
 
-          map.addLayer({
-            'id': 'route-line',
-            'type': 'line',
-            'source': 'route',
-            'layout': {
-              'line-join': 'round',
-              'line-cap': 'round'
-            },
-            'paint': {
-              'line-color': '#0066cc',
-              'line-width': 5,
-              'line-opacity': 0.8
-            }
-          });
-
-          // Adattamento della vista iniziale al percorso caricato
-          const bbox = turf.bbox(geojsonData);
-          map.fitBounds(bbox, { padding: 40 });
-        })
-        .catch(error => {
-          console.error('Si è verificato un errore durante il recupero del file GeoJSON:', error);
+        // Caricamento del tracciato GeoJSON unificato sulla mappa
+        map.addSource('route', {
+          'type': 'geojson',
+          'data': geojsonData
         });
+
+        map.addLayer({
+          'id': 'route-line',
+          'type': 'line',
+          'source': 'route',
+          'layout': {
+            'line-join': 'round',
+            'line-cap': 'round'
+          },
+          'paint': {
+            'line-color': '#0066cc',
+            'line-width': 5,
+            'line-opacity': 0.8
+          }
+        });
+
+        // Adattamento della vista iniziale al perimetro di tutti i tracciati
+        const bbox = turf.bbox(geojsonData);
+        map.fitBounds(bbox, { padding: 40 });
+      })
+      .catch(error => {
+        console.error('Si è verificato un errore durante il recupero dei file GeoJSON:', error);
+      });
 
       // Sorgente e Layer per il Cerchio di Accuratezza GPS
       map.addSource('gps-accuracy', {
@@ -218,26 +228,17 @@
       });
     });
 
-    // Funzione Calcolo della Progressiva KM (Turf.js)
+    // Funzione Calcolo della Progressiva KM (Turf.js) supporta FeatureCollection e MultiLineString
     function getProgressivaKm(userLat, userLon, data) {
       if (!data) return { km: '--.---', snappedCoords: [userLon, userLat] };
       
       const userPt = turf.point([userLon, userLat]);
-      
-      // Gestisce sia Feature che FeatureCollection/Geometry diretti
-      let mainBranchCoords;
-      if (data.type === 'FeatureCollection') {
-        mainBranchCoords = data.features[0].geometry.coordinates[0] || data.features[0].geometry.coordinates;
-      } else if (data.geometry.type === 'MultiLineString') {
-        mainBranchCoords = data.geometry.coordinates[0];
-      } else {
-        mainBranchCoords = data.geometry.coordinates;
-      }
+      const combined = turf.combine(data);
+      const combinedLine = combined.features[0];
 
-      const mainLine = turf.lineString(mainBranchCoords);
-      const snapped = turf.nearestPointOnLine(mainLine, userPt);
+      const snapped = turf.nearestPointOnLine(combinedLine, userPt);
       return {
-        km: snapped.properties.location.toFixed(3),
+        km: snapped.properties.location ? snapped.properties.location.toFixed(3) : '--.---',
         snappedCoords: snapped.geometry.coordinates
       };
     }
@@ -319,7 +320,7 @@
           turf.point([lon, lat]),
           { units: 'meters' }
         );
-        // Aggiorna l'orientamento solo se ci si è spostati di almeno 2 metri (evita rotazioni da fermo/rumore GPS)
+        // Aggiorna l'orientamento solo se ci si è spostati di almeno 2 metri
         if (dist > 2) {
           lastBearing = turf.bearing(
             turf.point([lastCoords.lon, lastCoords.lat]),
@@ -332,7 +333,7 @@
       if (followMode) {
         map.easeTo({
           center: [lon, lat],
-          bearing: lastBearing, // La mappa ruota mantenendo in alto la direzione di marcia
+          bearing: lastBearing,
           duration: 1000
         });
       }
@@ -341,7 +342,6 @@
     }
 
     function onLocationError(e) {
-      // Se si perde il segnale GPS e si trova in followMode, mantiene il centro e il bearing conosciuto
       if (followMode && lastCoords) {
         map.easeTo({
           center: [lastCoords.lon, lastCoords.lat],
@@ -380,7 +380,7 @@
       }
     });
 
-    // Gestione Pulsante Centra Posizione (Effettua il riposizionamento al centro)
+    // Gestione Pulsante Centra Posizione
     const recenterBtn = document.getElementById('recenter-btn');
     recenterBtn.addEventListener('click', () => {
       if (lastCoords) {
