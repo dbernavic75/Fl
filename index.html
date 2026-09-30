@@ -147,7 +147,7 @@
     let popupTimer = null;
 
     map.on('load', () => {
-      // Caricamento asincrono separato dei file GeoJSON
+      // Caricamento asincrono separato dei file GeoJSON dalla cartella geojson/
       Promise.all([
         fetch('geojson/r16.geojson').then(res => {
           if (!res.ok) throw new Error('Errore nel caricamento di r16.geojson');
@@ -156,18 +156,25 @@
         fetch('geojson/r17.geojson').then(res => {
           if (!res.ok) throw new Error('Errore nel caricamento di r17.geojson');
           return res.json();
+        }),
+        fetch('geojson/r27.geojson').then(res => {
+          if (!res.ok) throw new Error('Errore nel caricamento di r27.geojson');
+          return res.json();
         })
       ])
-      .then(([data16, data17]) => {
-        geojsonList = [data16, data17];
+      .then(([data16, data17, data27]) => {
+        geojsonList = [data16, data17, data27];
 
         // Creiamo una FeatureCollection unificata SOLO per la visualizzazione grafica sul layer
-        const features16 = data16.type === 'FeatureCollection' ? data16.features : [data16];
-        const features17 = data17.type === 'FeatureCollection' ? data17.features : [data17];
+        const extractFeatures = (data) => data.type === 'FeatureCollection' ? data.features : [data];
 
         const visualCollection = {
           type: 'FeatureCollection',
-          features: [...features16, ...features17]
+          features: [
+            ...extractFeatures(data16),
+            ...extractFeatures(data17),
+            ...extractFeatures(data27)
+          ]
         };
 
         map.addSource('route', {
@@ -190,7 +197,7 @@
           }
         });
 
-        // Adattamento della vista iniziale a entrambe le linee
+        // Adattamento della vista iniziale a tutte le linee
         const bbox = turf.bbox(visualCollection);
         map.fitBounds(bbox, { padding: 40 });
       })
@@ -237,7 +244,7 @@
       let closestResult = null;
       let minDistance = Infinity;
 
-      // Scansiona ciascun tracciato separatamente mantenendo la propria origine
+      // Scansiona ciascun tracciato separatamente mantenendo la propria origine da Milano Cadorna
       list.forEach(data => {
         let lineGeom;
         if (data.type === 'FeatureCollection') {
