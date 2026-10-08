@@ -70,7 +70,6 @@
       color: white;
     }
 
-    /* Marker Cerchietto ad alto contrasto */
     .user-dot-marker {
       width: 16px;
       height: 16px;
@@ -80,7 +79,6 @@
       box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
     }
 
-    /* Stile personalizzato per il Popup del punto toccato */
     .custom-km-popup .maplibregl-popup-content {
       background-color: #0066cc;
       color: #ffffff;
@@ -119,24 +117,22 @@
     <button id="recenter-btn" class="gps-btn">🎯 Centra Posizione</button>
   </div>
   
-  <!-- MapLibre GL e Turf.js -->
   <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
   
   <script>
-    let geojsonList = []; // Mantiene la lista dei file GeoJSON caricati separatamente
+    let geojsonList = [];
 
-    // Inizializzazione della Mappa Vettoriale MapLibre
     const map = new maplibregl.Map({
       container: 'map',
       style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
       center: [9.20, 45.66],
       zoom: 12,
-      pitch: 45 // Inclinazione della vista simil-navigatore
+      pitch: 45
     });
 
     let followMode = true;
-    let lastBearing = 0; // Memorizza l'ultima direzione valida
+    let lastBearing = 0;
     let userMarkerElement = document.createElement('div');
     userMarkerElement.className = 'user-dot-marker';
     
@@ -147,34 +143,26 @@
     let popupTimer = null;
 
     map.on('load', () => {
-      // Caricamento asincrono separato dei file GeoJSON dalla cartella geojson/
       Promise.all([
-        fetch('geojson/r16.geojson').then(res => {
-          if (!res.ok) throw new Error('Errore nel caricamento di r16.geojson');
-          return res.json();
-        }),
-        fetch('geojson/r17.geojson').then(res => {
-          if (!res.ok) throw new Error('Errore nel caricamento di r17.geojson');
-          return res.json();
-        }),
-        fetch('geojson/r27.geojson').then(res => {
-          if (!res.ok) throw new Error('Errore nel caricamento di r27.geojson');
-          return res.json();
-        })
+        fetch('geojson/r16.geojson').then(res => { if (!res.ok) throw new Error('r16.geojson non trovato'); return res.json(); }),
+        fetch('geojson/r17.geojson').then(res => { if (!res.ok) throw new Error('r17.geojson non trovato'); return res.json(); }),
+        fetch('geojson/r27.geojson').then(res => { if (!res.ok) throw new Error('r27.geojson non trovato'); return res.json(); })
       ])
       .then(([data16, data17, data27]) => {
         geojsonList = [data16, data17, data27];
 
-        // Creiamo una FeatureCollection unificata SOLO per la visualizzazione grafica sul layer
-        const extractFeatures = (data) => data.type === 'FeatureCollection' ? data.features : [data];
+        let allFeatures = [];
+        [data16, data17, data27].forEach(data => {
+          if (data.type === 'FeatureCollection') {
+            allFeatures.push(...data.features);
+          } else if (data.type === 'Feature') {
+            allFeatures.push(data);
+          }
+        });
 
         const visualCollection = {
           type: 'FeatureCollection',
-          features: [
-            ...extractFeatures(data16),
-            ...extractFeatures(data17),
-            ...extractFeatures(data27)
-          ]
+          features: allFeatures
         };
 
         map.addSource('route', {
@@ -197,46 +185,33 @@
           }
         });
 
-        // Adattamento della vista iniziale a tutte le linee
         const bbox = turf.bbox(visualCollection);
         map.fitBounds(bbox, { padding: 40 });
       })
       .catch(error => {
-        console.error('Si è verificato un errore durante il recupero dei file GeoJSON:', error);
+        console.error('Errore durante il recupero dei file GeoJSON:', error);
       });
 
-      // Sorgente e Layer per il Cerchio di Accuratezza GPS
       map.addSource('gps-accuracy', {
         'type': 'geojson',
-        'data': {
-          'type': 'FeatureCollection',
-          'features': []
-        }
+        'data': { 'type': 'FeatureCollection', 'features': [] }
       });
 
       map.addLayer({
         'id': 'gps-accuracy-fill',
         'type': 'fill',
         'source': 'gps-accuracy',
-        'paint': {
-          'fill-color': '#0078FF',
-          'fill-opacity': 0.15
-        }
+        'paint': { 'fill-color': '#0078FF', 'fill-opacity': 0.15 }
       });
 
       map.addLayer({
         'id': 'gps-accuracy-outline',
         'type': 'line',
         'source': 'gps-accuracy',
-        'paint': {
-          'line-color': '#0078FF',
-          'line-width': 1,
-          'line-opacity': 0.4
-        }
+        'paint': { 'line-color': '#0078FF', 'line-width': 1, 'line-opacity': 0.4 }
       });
     });
 
-    // Funzione Calcolo della Progressiva KM indipendente per ogni linea
     function getProgressivaKm(userLat, userLon, list) {
       if (!list || list.length === 0) return { km: '--.---', snappedCoords: [userLon, userLat] };
       
@@ -244,42 +219,37 @@
       let closestResult = null;
       let minDistance = Infinity;
 
-      // Scansiona ciascun tracciato separatamente mantenendo la propria origine da Milano Cadorna
       list.forEach(data => {
-        let lineGeom;
-        if (data.type === 'FeatureCollection') {
-          const coords = data.features[0].geometry.coordinates;
-          lineGeom = turf.lineString(coords[0] || coords);
-        } else if (data.geometry.type === 'MultiLineString') {
-          lineGeom = turf.lineString(data.geometry.coordinates[0]);
-        } else {
-          lineGeom = turf.lineString(data.geometry.coordinates);
-        }
+        try {
+          // Convertiamo qualsiasi tipo di geometria in una lista di Feature LineString
+          const flattened = turf.flatten(data);
+          
+          flattened.features.forEach(feat => {
+            const snapped = turf.nearestPointOnLine(feat, userPt);
+            const distFromUser = snapped.properties.dist;
 
-        const snapped = turf.nearestPointOnLine(lineGeom, userPt);
-        const distFromUser = snapped.properties.dist; // Distanza in km dal punto di click/utente alla linea
-
-        // Trova la linea più vicina al punto selezionato/GPS
-        if (distFromUser < minDistance) {
-          minDistance = distFromUser;
-          closestResult = {
-            km: snapped.properties.location ? snapped.properties.location.toFixed(3) : '--.---',
-            snappedCoords: snapped.geometry.coordinates
-          };
+            if (distFromUser < minDistance) {
+              minDistance = distFromUser;
+              closestResult = {
+                km: snapped.properties.location !== undefined ? snapped.properties.location.toFixed(3) : '--.---',
+                snappedCoords: snapped.geometry.coordinates
+              };
+            }
+          });
+        } catch (err) {
+          console.warn("Errore elaborazione tracciato:", err);
         }
       });
 
       return closestResult || { km: '--.---', snappedCoords: [userLon, userLat] };
     }
 
-    // Gestione del Tocco / Click sul Tracciato
     map.on('click', 'route-line', (e) => {
       if (geojsonList.length === 0) return;
 
       const clickLat = e.lngLat.lat;
       const clickLon = e.lngLat.lng;
 
-      // Calcola la progressiva rispetto alla sola linea più vicina al punto cliccato
       const result = getProgressivaKm(clickLat, clickLon, geojsonList);
 
       if (popupTimer) clearTimeout(popupTimer);
@@ -303,14 +273,9 @@
       }, 5000);
     });
 
-    map.on('mouseenter', 'route-line', () => {
-      map.getCanvas().style.cursor = 'pointer';
-    });
-    map.on('mouseleave', 'route-line', () => {
-      map.getCanvas().style.cursor = '';
-    });
+    map.on('mouseenter', 'route-line', () => { map.getCanvas().style.cursor = 'pointer'; });
+    map.on('mouseleave', 'route-line', () => { map.getCanvas().style.cursor = ''; });
 
-    // Gestione aggiornamenti Posizione e Orientamento
     function onLocationFound(e) {
       const lat = e.coords.latitude;
       const lon = e.coords.longitude;
@@ -326,9 +291,7 @@
       
       if (accuracy !== undefined && accuracy !== null) {
         document.getElementById('accuracy-text').innerText = `Accuratezza GPS: ±${Math.round(accuracy)} m`;
-
         const circleFeature = turf.buffer(turf.point([lon, lat]), accuracy, { units: 'meters' });
-        
         if (map.getSource('gps-accuracy')) {
           map.getSource('gps-accuracy').setData(circleFeature);
         }
