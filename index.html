@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mappa Percorso GeoJSON con GPS e Fascicolo Linea PDF</title>
+  <title>Mappa GeoJSON & Fascicolo Linea PDF Grafico</title>
   
   <!-- MapLibre GL CSS -->
   <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
   
-  <!-- PDF.js Libreria Mozilla per lettura PDF client-side -->
+  <!-- PDF.js Mozilla CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -18,15 +18,16 @@
     body {
       margin: 0;
       padding: 0;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
     }
+
     #map {
       height: 100vh;
       width: 100%;
-      margin: 0;
-      padding: 0;
     }
 
-    /* Box Info GPS Chilometrica */
+    /* Box Chilometrica GPS (In Basso a Sinistra) */
     #display-km {
       position: absolute;
       bottom: 20px;
@@ -36,7 +37,6 @@
       border: 2px solid #0066cc;
       border-radius: 8px;
       padding: 10px 16px;
-      font-family: Arial, sans-serif;
       font-weight: bold;
       font-size: 18px;
       color: #333333;
@@ -52,51 +52,78 @@
       font-weight: normal;
     }
 
-    /* Box Fascicolo Linea PDF */
-    #fascicolo-box {
+    /* Contenitore Finestra PDF Originale (In Alto a Sinistra) */
+    #pdf-viewer-container {
       position: absolute;
       top: 10px;
       left: 10px;
-      z-index: 10;
-      background-color: rgba(255, 255, 255, 0.95);
-      border: 2px solid #28a745;
-      border-radius: 8px;
-      padding: 12px 16px;
-      font-family: Arial, sans-serif;
-      color: #222;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-      max-width: 360px;
+      z-index: 12;
+      width: 380px;
+      max-height: 480px;
+      background: #ffffff;
+      border: 2px solid #0066cc;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      overflow: hidden;
     }
 
-    .fl-title {
+    #pdf-header {
+      background-color: #0066cc;
+      color: #ffffff;
+      padding: 8px 12px;
       font-size: 13px;
       font-weight: bold;
-      color: #28a745;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
     }
 
-    .fl-section {
-      font-size: 12px;
-      color: #555;
-      font-style: italic;
+    #pdf-canvas-wrapper {
+      position: relative;
+      width: 100%;
+      height: 400px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: #f0f0f0;
     }
 
-    .fl-row {
-      font-size: 14px;
+    #pdf-canvas {
+      display: block;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* Indicatore Posizione Treno sulla Tabella PDF */
+    #pdf-train-marker {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 26px;
+      background-color: rgba(255, 0, 85, 0.25);
+      border-top: 2px solid #ff0055;
+      border-bottom: 2px solid #ff0055;
+      pointer-events: none;
+      transition: top 0.3s ease-in-out;
+      display: none;
+      z-index: 5;
+    }
+
+    #pdf-train-marker::before {
+      content: "🚂 POSIZIONE TRENO";
+      position: absolute;
+      right: 6px;
+      top: 2px;
+      font-size: 10px;
       font-weight: bold;
-      color: #000;
+      color: #b3003b;
+      background: rgba(255, 255, 255, 0.85);
+      padding: 1px 4px;
+      border-radius: 3px;
     }
 
-    .fl-next {
-      font-size: 13px;
-      color: #444;
-    }
-
-    /* Pulsanti di controllo */
+    /* Pulsanti GPS */
     .controls-container {
       position: absolute;
       top: 10px;
@@ -134,7 +161,6 @@
     .custom-km-popup .maplibregl-popup-content {
       background-color: #0066cc;
       color: #ffffff;
-      font-family: Arial, sans-serif;
       font-weight: bold;
       font-size: 15px;
       padding: 8px 12px;
@@ -152,15 +178,19 @@
 
   <div id="map"></div>
 
-  <!-- Box Fascicolo Linea PDF -->
-  <div id="fascicolo-box">
-    <div class="fl-title">📖 Fascicolo Linea (PDF)</div>
-    <div id="fl-header" class="fl-section">Caricamento PDF in corso...</div>
-    <div id="fl-current" class="fl-row">In attesa del segnale GPS...</div>
-    <div id="fl-next" class="fl-next">Prossimo elemento: --</div>
+  <!-- Finestra Fascicolo Linea PDF Originale -->
+  <div id="pdf-viewer-container">
+    <div id="pdf-header">
+      <span id="pdf-title-text">📄 Fascicolo Linea PDF</span>
+      <span id="pdf-page-num" style="font-size: 11px; opacity: 0.9;">Pag. --</span>
+    </div>
+    <div id="pdf-canvas-wrapper">
+      <div id="pdf-train-marker"></div>
+      <canvas id="pdf-canvas"></canvas>
+    </div>
   </div>
 
-  <!-- Box GPS Chilometrica -->
+  <!-- Display Chilometrica GPS -->
   <div id="display-km">
     <div id="km-text">Km --.---</div>
     <div id="accuracy-text" class="accuracy-info">Accuratezza GPS: -- m</div>
@@ -177,13 +207,15 @@
   <script>
     let geojsonList = [];
     let pdfDoc = null;
-    let parsedPdfData = []; // Struttura in memoria estratta direttamente dal PDF
+    let pageTextData = []; 
+    let currentRenderedPage = null;
+    let isRendering = false;
 
-    // Mappatura delle linee GeoJSON alle pagine del PDF
+    // Associazione delle linee GeoJSON alle pagine del PDF
     const linePageMapping = {
-      'r16': [1, 2, 3, 4, 5, 6, 7, 8],     // Pagine per Milano Cadorna - Saronno (Diretta e Locale)
-      'r17': [9, 10, 11, 12, 13, 14],     // Pagine per Saronno - Varese / Laveno
-      'r27': [45, 46, 47, 48]             // Pagine per Seveso - Asso
+      'r16': [1, 2, 3, 4, 5, 6, 7, 8],
+      'r17': [9, 10, 11, 12, 13, 14],
+      'r27': [45, 46, 47, 48]
     };
 
     const map = new maplibregl.Map({
@@ -205,108 +237,144 @@
     let currentClickPopup = null;
     let popupTimer = null;
 
-    // --- CARICAMENTO E PARSING PDF CON PDF.JS ---
+    // --- CARICAMENTO E PARSING DEL FILE PDF ---
     pdfjsLib.getDocument('fl_fnm.pdf').promise.then(async function(pdfDoc_) {
       pdfDoc = pdfDoc_;
-      document.getElementById('fl-header').innerText = "PDF caricato. Analisi linee in corso...";
-      console.log("PDF caricato con successo. Pagine totali:", pdfDoc.numPages);
-      await extractAllPDFData();
-      document.getElementById('fl-header').innerText = "Fascicolo Linea Sincronizzato";
+      document.getElementById('pdf-title-text').innerText = "Fascicolo Linea Caricato";
+      console.log("PDF caricato. Pagine:", pdfDoc.numPages);
+      await parsePDFStructure();
     }).catch(err => {
-      console.error("Errore caricamento PDF:", err);
-      document.getElementById('fl-header').innerText = "Errore caricamento fl_fnm.pdf";
+      console.error("Errore apertura PDF:", err);
+      document.getElementById('pdf-title-text').innerText = "Errore fl_fnm.pdf";
     });
 
-    // Estrazione dati da tutte le pagine del PDF
-    async function extractAllPDFData() {
-      parsedPdfData = [];
+    // Mappatura delle posizioni Y (coordinate verticali) delle progressive per ciascuna pagina
+    async function parsePDFStructure() {
+      pageTextData = [];
       for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
         const page = await pdfDoc.getPage(pageNum);
         const textContent = await page.getTextContent();
+        const viewport = page.getViewport({ scale: 1.0 });
 
-        let pageTitle = "";
-        let pageRows = [];
-
-        // Raggruppamento del testo per coordinata Y (righe di tabella)
-        let rowsByY = {};
+        let kmEntries = [];
 
         textContent.items.forEach(item => {
           let str = item.str.trim();
-          if (!str) return;
+          let match = str.match(/^(\d{1,3},\d{3})$/);
+          if (match) {
+            let kmVal = parseFloat(match[1].replace(',', '.'));
+            // Calcoliamo la coordinata Y convertita rispetto all'altezza del viewport
+            let originalY = item.transform[5];
+            let normalizedY = viewport.height - originalY;
 
-          let y = Math.round(item.transform[5]);
-          if (!rowsByY[y]) rowsByY[y] = [];
-          rowsByY[y].push({ x: item.transform[4], text: str });
-        });
-
-        // Ordinamento righe dall'alto verso il basso
-        let sortedY = Object.keys(rowsByY).sort((a, b) => b - a);
-
-        sortedY.forEach(y => {
-          let items = rowsByY[y].sort((a, b) => a.x - b.x);
-          let fullRowText = items.map(i => i.text).join(" ");
-
-          if (fullRowText.includes("Fiancata principale") || fullRowText.includes("tronco")) {
-            pageTitle = fullRowText;
+            kmEntries.push({
+              km: kmVal,
+              y: normalizedY,
+              viewportHeight: viewport.height
+            });
           }
-
-          // Cerca elementi con chilometrica (formato es. 0,000 o 21,157)
-          items.forEach(item => {
-            let match = item.text.match(/^(\d{1,3},\d{3})$/);
-            if (match) {
-              let kmVal = parseFloat(match[1].replace(',', '.'));
-              pageRows.push({
-                km: kmVal,
-                fullRowText: fullRowText,
-                page: pageNum
-              });
-            }
-          });
         });
 
-        if (pageRows.length > 0) {
-          parsedPdfData.push({
-            page: pageNum,
-            title: pageTitle || `Pagina ${pageNum}`,
-            rows: pageRows.sort((a, b) => a.km - b.km)
+        if (kmEntries.length > 0) {
+          pageTextData.push({
+            pageNum: pageNum,
+            entries: kmEntries.sort((a, b) => a.km - b.km)
           });
         }
       }
     }
 
-    // --- AGGIORNAMENTO FASCICOLO LINEA IN BASE ALLA PROGRESSIVA KM REALE ---
-    function updateFascicoloUi(currentKm, activeLineKey) {
-      if (parsedPdfData.length === 0) return;
+    // --- RENDERING DELLA PAGINA PDF SU CANVAS E CENTRAGGIO SULLA PROGRESSIVA ---
+    async function renderPdfPageAndFocus(pageNum, targetKm) {
+      if (!pdfDoc || isRendering) return;
 
-      let allowedPages = linePageMapping[activeLineKey] || [];
-      let candidateRows = [];
+      const pageData = pageTextData.find(p => p.pageNum === pageNum);
+      if (!pageData) return;
 
-      parsedPdfData.forEach(p => {
-        if (allowedPages.length === 0 || allowedPages.includes(p.page)) {
-          p.rows.forEach(r => {
-            candidateRows.push({ ...r, pageTitle: p.title });
-          });
-        }
-      });
+      // Se la pagina è già renderizzata, aggiorniamo solo la posizione dell'indicatore
+      if (currentRenderedPage !== pageNum) {
+        isRendering = true;
+        currentRenderedPage = pageNum;
+        document.getElementById('pdf-page-num').innerText = `Pag. ${pageNum}`;
 
-      if (candidateRows.length === 0) return;
+        const page = await pdfDoc.getPage(pageNum);
+        const containerWidth = document.getElementById('pdf-canvas-wrapper').clientWidth;
+        const unscaledViewport = page.getViewport({ scale: 1.0 });
+        const scale = containerWidth / unscaledViewport.width;
+        const viewport = page.getViewport({ scale: scale });
 
-      candidateRows.sort((a, b) => a.km - b.km);
+        const canvas = document.getElementById('pdf-canvas');
+        const context = canvas.getContext('2d');
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
 
-      let prevElement = candidateRows[0];
-      let nextElement = candidateRows[candidateRows.length - 1];
+        await page.render({
+          canvasContext: context,
+          viewport: viewport
+        }).promise;
 
-      for (let i = 0; i < candidateRows.length - 1; i++) {
-        if (currentKm >= candidateRows[i].km && currentKm <= candidateRows[i+1].km) {
-          prevElement = candidateRows[i];
-          nextElement = candidateRows[i+1];
+        canvas.dataset.scale = scale;
+        isRendering = false;
+      }
+
+      // Calcolo della coordinata Y dell'indicatore per la progressiva del treno
+      const canvas = document.getElementById('pdf-canvas');
+      const currentScale = parseFloat(canvas.dataset.scale) || 1.0;
+      
+      let entries = pageData.entries;
+      let matchedEntry = entries[0];
+
+      for (let i = 0; i < entries.length - 1; i++) {
+        if (targetKm >= entries[i].km && targetKm <= entries[i+1].km) {
+          // Interpolazione lineare per posizionare con precisione la riga
+          let ratio = (targetKm - entries[i].km) / (entries[i+1].km - entries[i].km);
+          let interpolatedY = entries[i].y + ratio * (entries[i+1].y - entries[i].y);
+          matchedEntry = { y: interpolatedY };
           break;
+        } else if (targetKm > entries[entries.length - 1].km) {
+          matchedEntry = entries[entries.length - 1];
         }
       }
 
-      document.getElementById('fl-header').innerText = prevElement.pageTitle || `Pagina PDF: ${prevElement.page}`;
-      document.getElementById('fl-current').innerText = `📍 Km ${prevElement.km.toFixed(3)} - ${prevElement.fullRowText}`;
-      document.getElementById('fl-next').innerText = `➡️ Succ: Km ${nextElement.km.toFixed(3)} - ${nextElement.fullRowText}`;
+      if (matchedEntry) {
+        const marker = document.getElementById('pdf-train-marker');
+        const calculatedTop = (matchedEntry.y * currentScale) - 13; // Centra la barra alta 26px
+        
+        marker.style.top = `${calculatedTop}px`;
+        marker.style.display = 'block';
+
+        // Centra lo scorrimento del box sui 5 punti precedenti e successivi
+        const wrapper = document.getElementById('pdf-canvas-wrapper');
+        const scrollTarget = calculatedTop - (wrapper.clientHeight / 2) + 13;
+        wrapper.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
+      }
+    }
+
+    // Trova la pagina e aggiorna il PDF
+    function syncPdfWithKm(currentKm, lineKey) {
+      if (pageTextData.length === 0) return;
+
+      let allowedPages = linePageMapping[lineKey] || [];
+      let targetPage = null;
+
+      for (let p of pageTextData) {
+        if (allowedPages.length === 0 || allowedPages.includes(p.pageNum)) {
+          let minKm = p.entries[0].km;
+          let maxKm = p.entries[p.entries.length - 1].km;
+          if (currentKm >= minKm - 0.5 && currentKm <= maxKm + 0.5) {
+            targetPage = p.pageNum;
+            break;
+          }
+        }
+      }
+
+      if (!targetPage && allowedPages.length > 0) {
+        targetPage = allowedPages[0];
+      }
+
+      if (targetPage) {
+        renderPdfPageAndFocus(targetPage, currentKm);
+      }
     }
 
     map.on('load', () => {
@@ -460,9 +528,9 @@
         const resultGps = getProgressivaKm(lat, lon, geojsonList);
         document.getElementById('km-text').innerText = `Km ${resultGps.km}`;
         
-        // Sincronizzazione automatica con il Fascicolo Linea PDF
+        // Sincronizzazione automatica con la vista grafica del PDF
         if (resultGps.kmNum > 0) {
-          updateFascicoloUi(resultGps.kmNum, resultGps.lineKey);
+          syncPdfWithKm(resultGps.kmNum, resultGps.lineKey);
         }
       }
       
