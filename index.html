@@ -3,12 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mappa GeoJSON & Fascicolo Linea PDF Grafico</title>
+  <title>Mappa GeoJSON & Fascicolo Linea PDF HD</title>
   
-  <!-- MapLibre GL CSS -->
   <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
   
-  <!-- PDF.js Mozilla CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script>
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
@@ -27,7 +25,6 @@
       width: 100%;
     }
 
-    /* Box Chilometrica GPS (In Basso a Sinistra) */
     #display-km {
       position: absolute;
       bottom: 20px;
@@ -52,14 +49,14 @@
       font-weight: normal;
     }
 
-    /* Contenitore Finestra PDF Originale (In Alto a Sinistra) */
+    /* Finestra PDF in Alta Definizione */
     #pdf-viewer-container {
       position: absolute;
       top: 10px;
       left: 10px;
       z-index: 12;
-      width: 380px;
-      max-height: 480px;
+      width: 400px;
+      max-height: 500px;
       background: #ffffff;
       border: 2px solid #0066cc;
       border-radius: 10px;
@@ -83,7 +80,7 @@
     #pdf-canvas-wrapper {
       position: relative;
       width: 100%;
-      height: 400px;
+      height: 420px;
       overflow-y: auto;
       overflow-x: hidden;
       background: #f0f0f0;
@@ -92,15 +89,14 @@
     #pdf-canvas {
       display: block;
       margin: 0 auto;
-      width: 100%;
+      width: 100%; /* Il CSS adatta la larghezza, la risoluzione interna è gestita via script in HD */
     }
 
-    /* Indicatore Posizione Treno sulla Tabella PDF */
     #pdf-train-marker {
       position: absolute;
       left: 0;
       right: 0;
-      height: 26px;
+      height: 30px;
       background-color: rgba(255, 0, 85, 0.25);
       border-top: 2px solid #ff0055;
       border-bottom: 2px solid #ff0055;
@@ -113,17 +109,16 @@
     #pdf-train-marker::before {
       content: "🚂 POSIZIONE TRENO";
       position: absolute;
-      right: 6px;
-      top: 2px;
+      right: 8px;
+      top: 4px;
       font-size: 10px;
       font-weight: bold;
       color: #b3003b;
-      background: rgba(255, 255, 255, 0.85);
-      padding: 1px 4px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 2px 5px;
       border-radius: 3px;
     }
 
-    /* Pulsanti GPS */
     .controls-container {
       position: absolute;
       top: 10px;
@@ -142,7 +137,7 @@
       cursor: pointer;
       font-weight: bold;
       font-size: 14px;
-      box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+      box-shadow: 1px 5px rgba(0,0,0,0.4);
     }
     .gps-btn.active {
       background-color: #0078FF;
@@ -157,32 +152,16 @@
       border-radius: 50%;
       box-shadow: 0 0 6px rgba(0, 0, 0, 0.6);
     }
-
-    .custom-km-popup .maplibregl-popup-content {
-      background-color: #0066cc;
-      color: #ffffff;
-      font-weight: bold;
-      font-size: 15px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-      text-align: center;
-    }
-    .custom-km-popup .maplibregl-popup-anchor-bottom .maplibregl-popup-tip { border-top-color: #0066cc; }
-    .custom-km-popup .maplibregl-popup-anchor-top .maplibregl-popup-tip { border-bottom-color: #0066cc; }
-    .custom-km-popup .maplibregl-popup-anchor-left .maplibregl-popup-tip { border-right-color: #0066cc; }
-    .custom-km-popup .maplibregl-popup-anchor-right .maplibregl-popup-tip { border-left-color: #0066cc; }
   </style>
 </head>
 <body>
 
   <div id="map"></div>
 
-  <!-- Finestra Fascicolo Linea PDF Originale -->
   <div id="pdf-viewer-container">
     <div id="pdf-header">
-      <span id="pdf-title-text">📄 Fascicolo Linea PDF</span>
-      <span id="pdf-page-num" style="font-size: 11px; opacity: 0.9;">Pag. --</span>
+      <span id="pdf-title-text">📄 Fascicolo Linea PDF (HD)</span>
+      <span id="pdf-page-num" style="font-size: 11px;">Pag. --</span>
     </div>
     <div id="pdf-canvas-wrapper">
       <div id="pdf-train-marker"></div>
@@ -190,7 +169,6 @@
     </div>
   </div>
 
-  <!-- Display Chilometrica GPS -->
   <div id="display-km">
     <div id="km-text">Km --.---</div>
     <div id="accuracy-text" class="accuracy-info">Accuratezza GPS: -- m</div>
@@ -210,12 +188,24 @@
     let pageTextData = []; 
     let currentRenderedPage = null;
     let isRendering = false;
+    let lastKmValue = null;
+    let trainDirection = 'increasing'; // 'increasing' o 'decreasing'
 
-    // Associazione delle linee GeoJSON alle pagine del PDF
+    // Mappatura avanzata pagine PDF in base alla linea e al verso
+    // r16: Milano Cadorna - Saronno
     const linePageMapping = {
-      'r16': [1, 2, 3, 4, 5, 6, 7, 8],
-      'r17': [9, 10, 11, 12, 13, 14],
-      'r27': [45, 46, 47, 48]
+      'r16': {
+        increasing: [1, 2, 5, 6], // Pagine di andata (Cadorna -> Saronno)[cite: 1, 2, 5, 6]
+        decreasing: [3, 4, 7, 8]  // Pagine di ritorno (Saronno -> Cadorna)[cite: 3, 4, 7, 8]
+      },
+      'r17': {
+        increasing: [9, 10, 11],
+        decreasing: [12, 13, 14]
+      },
+      'r27': {
+        increasing: [45, 46],
+        decreasing: [47, 48]
+      }
     };
 
     const map = new maplibregl.Map({
@@ -237,18 +227,14 @@
     let currentClickPopup = null;
     let popupTimer = null;
 
-    // --- CARICAMENTO E PARSING DEL FILE PDF ---
     pdfjsLib.getDocument('fl_fnm.pdf').promise.then(async function(pdfDoc_) {
       pdfDoc = pdfDoc_;
-      document.getElementById('pdf-title-text').innerText = "Fascicolo Linea Caricato";
-      console.log("PDF caricato. Pagine:", pdfDoc.numPages);
+      document.getElementById('pdf-title-text').innerText = "Fascicolo Linea (Pronto)";
       await parsePDFStructure();
     }).catch(err => {
       console.error("Errore apertura PDF:", err);
-      document.getElementById('pdf-title-text').innerText = "Errore fl_fnm.pdf";
     });
 
-    // Mappatura delle posizioni Y (coordinate verticali) delle progressive per ciascuna pagina
     async function parsePDFStructure() {
       pageTextData = [];
       for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
@@ -263,7 +249,6 @@
           let match = str.match(/^(\d{1,3},\d{3})$/);
           if (match) {
             let kmVal = parseFloat(match[1].replace(',', '.'));
-            // Calcoliamo la coordinata Y convertita rispetto all'altezza del viewport
             let originalY = item.transform[5];
             let normalizedY = viewport.height - originalY;
 
@@ -284,14 +269,13 @@
       }
     }
 
-    // --- RENDERING DELLA PAGINA PDF SU CANVAS E CENTRAGGIO SULLA PROGRESSIVA ---
+    // Rendering HD con Device Pixel Ratio per eliminare la sgranatura
     async function renderPdfPageAndFocus(pageNum, targetKm) {
       if (!pdfDoc || isRendering) return;
 
       const pageData = pageTextData.find(p => p.pageNum === pageNum);
       if (!pageData) return;
 
-      // Se la pagina è già renderizzata, aggiorniamo solo la posizione dell'indicatore
       if (currentRenderedPage !== pageNum) {
         isRendering = true;
         currentRenderedPage = pageNum;
@@ -300,11 +284,15 @@
         const page = await pdfDoc.getPage(pageNum);
         const containerWidth = document.getElementById('pdf-canvas-wrapper').clientWidth;
         const unscaledViewport = page.getViewport({ scale: 1.0 });
-        const scale = containerWidth / unscaledViewport.width;
+        
+        // Risoluzione HD moltiplicata per la densità dello schermo del dispositivo
+        const outputScale = window.devicePixelRatio || 2;
+        const scale = (containerWidth / unscaledViewport.width) * outputScale;
         const viewport = page.getViewport({ scale: scale });
 
         const canvas = document.getElementById('pdf-canvas');
         const context = canvas.getContext('2d');
+        
         canvas.height = viewport.height;
         canvas.width = viewport.width;
 
@@ -313,20 +301,19 @@
           viewport: viewport
         }).promise;
 
-        canvas.dataset.scale = scale;
+        // Salviamo la scala logica per posizionare correttamente il marcatore
+        canvas.dataset.logicalScale = (containerWidth / unscaledViewport.width);
         isRendering = false;
       }
 
-      // Calcolo della coordinata Y dell'indicatore per la progressiva del treno
       const canvas = document.getElementById('pdf-canvas');
-      const currentScale = parseFloat(canvas.dataset.scale) || 1.0;
+      const logicalScale = parseFloat(canvas.dataset.logicalScale) || 1.0;
       
       let entries = pageData.entries;
       let matchedEntry = entries[0];
 
       for (let i = 0; i < entries.length - 1; i++) {
         if (targetKm >= entries[i].km && targetKm <= entries[i+1].km) {
-          // Interpolazione lineare per posizionare con precisione la riga
           let ratio = (targetKm - entries[i].km) / (entries[i+1].km - entries[i].km);
           let interpolatedY = entries[i].y + ratio * (entries[i+1].y - entries[i].y);
           matchedEntry = { y: interpolatedY };
@@ -338,36 +325,45 @@
 
       if (matchedEntry) {
         const marker = document.getElementById('pdf-train-marker');
-        const calculatedTop = (matchedEntry.y * currentScale) - 13; // Centra la barra alta 26px
+        const calculatedTop = (matchedEntry.y * logicalScale) - 15;
         
         marker.style.top = `${calculatedTop}px`;
         marker.style.display = 'block';
 
-        // Centra lo scorrimento del box sui 5 punti precedenti e successivi
         const wrapper = document.getElementById('pdf-canvas-wrapper');
-        const scrollTarget = calculatedTop - (wrapper.clientHeight / 2) + 13;
+        const scrollTarget = calculatedTop - (wrapper.clientHeight / 2) + 15;
         wrapper.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
       }
     }
 
-    // Trova la pagina e aggiorna il PDF
     function syncPdfWithKm(currentKm, lineKey) {
       if (pageTextData.length === 0) return;
 
-      let allowedPages = linePageMapping[lineKey] || [];
+      // Determina il verso di marcia in base alla variazione della chilometrica
+      if (lastKmValue !== null) {
+        if (currentKm > lastKmValue) trainDirection = 'increasing';
+        else if (currentKm < lastKmValue) trainDirection = 'decreasing';
+      }
+      lastKmValue = currentKm;
+
+      let lineConfig = linePageMapping[lineKey] || { increasing: [], decreasing: [] };
+      let allowedPages = lineConfig[trainDirection] || lineConfig.increasing || [];
+      
       let targetPage = null;
 
+      // Cerca la pagina che contiene esattamente il chilometro attuale nel range corretto
       for (let p of pageTextData) {
         if (allowedPages.length === 0 || allowedPages.includes(p.pageNum)) {
           let minKm = p.entries[0].km;
           let maxKm = p.entries[p.entries.length - 1].km;
-          if (currentKm >= minKm - 0.5 && currentKm <= maxKm + 0.5) {
+          if (currentKm >= minKm - 0.2 && currentKm <= maxKm + 0.2) {
             targetPage = p.pageNum;
             break;
           }
         }
       }
 
+      // Fallback alla prima pagina consentita se non trova il match esatto nel range
       if (!targetPage && allowedPages.length > 0) {
         targetPage = allowedPages[0];
       }
@@ -379,9 +375,9 @@
 
     map.on('load', () => {
       Promise.all([
-        fetch('geojson/r16.geojson').then(res => { if (!res.ok) throw new Error('r16.geojson non trovato'); return res.json(); }),
-        fetch('geojson/r17.geojson').then(res => { if (!res.ok) throw new Error('r17.geojson non trovato'); return res.json(); }),
-        fetch('geojson/r27.geojson').then(res => { if (!res.ok) throw new Error('r27.geojson non trovato'); return res.json(); })
+        fetch('geojson/r16.geojson').then(res => res.json()),
+        fetch('geojson/r17.geojson').then(res => res.json()),
+        fetch('geojson/r27.geojson').then(res => res.json())
       ])
       .then(([data16, data17, data27]) => {
         geojsonList = [
@@ -390,70 +386,24 @@
           { key: 'r27', data: data27 }
         ];
 
-        let allFeatures = [];
-        [data16, data17, data27].forEach(data => {
-          if (data.type === 'FeatureCollection') {
-            allFeatures.push(...data.features);
-          } else if (data.type === 'Feature') {
-            allFeatures.push(data);
-          }
-        });
+        let allFeatures = [...data16.features, ...data17.features, ...data27.features];
+        const visualCollection = { type: 'FeatureCollection', features: allFeatures };
 
-        const visualCollection = {
-          type: 'FeatureCollection',
-          features: allFeatures
-        };
-
-        map.addSource('route', {
-          'type': 'geojson',
-          'data': visualCollection
-        });
-
+        map.addSource('route', { type: 'geojson', data: visualCollection });
         map.addLayer({
-          'id': 'route-line',
-          'type': 'line',
-          'source': 'route',
-          'layout': {
-            'line-join': 'round',
-            'line-cap': 'round'
-          },
-          'paint': {
-            'line-color': '#0066cc',
-            'line-width': 5,
-            'line-opacity': 0.8
-          }
+          id: 'route-line',
+          type: 'line',
+          source: 'route',
+          layout: { 'line-join': 'round', 'line-cap': 'round' },
+          paint: { 'line-color': '#0066cc', 'line-width': 5, 'line-opacity': 0.8 }
         });
 
-        const bbox = turf.bbox(visualCollection);
-        map.fitBounds(bbox, { padding: 40 });
-      })
-      .catch(error => {
-        console.error('Errore durante il recupero dei file GeoJSON:', error);
-      });
-
-      map.addSource('gps-accuracy', {
-        'type': 'geojson',
-        'data': { 'type': 'FeatureCollection', 'features': [] }
-      });
-
-      map.addLayer({
-        'id': 'gps-accuracy-fill',
-        'type': 'fill',
-        'source': 'gps-accuracy',
-        'paint': { 'fill-color': '#0078FF', 'fill-opacity': 0.15 }
-      });
-
-      map.addLayer({
-        'id': 'gps-accuracy-outline',
-        'type': 'line',
-        'source': 'gps-accuracy',
-        'paint': { 'line-color': '#0078FF', 'line-width': 1, 'line-opacity': 0.4 }
+        map.fitBounds(turf.bbox(visualCollection), { padding: 40 });
       });
     });
 
     function getProgressivaKm(userLat, userLon, list) {
-      if (!list || list.length === 0) return { km: '--.---', snappedCoords: [userLon, userLat], lineKey: 'r16' };
-      
+      if (!list || list.length === 0) return { km: '--.---', kmNum: 0, lineKey: 'r16' };
       const userPt = turf.point([userLon, userLat]);
       let closestResult = null;
       let minDistance = Infinity;
@@ -461,161 +411,50 @@
       list.forEach(item => {
         try {
           const flattened = turf.flatten(item.data);
-          
           flattened.features.forEach(feat => {
             const snapped = turf.nearestPointOnLine(feat, userPt);
-            const distFromUser = snapped.properties.dist;
-
-            if (distFromUser < minDistance) {
-              minDistance = distFromUser;
+            if (snapped.properties.dist < minDistance) {
+              minDistance = snapped.properties.dist;
               closestResult = {
-                km: snapped.properties.location !== undefined ? snapped.properties.location.toFixed(3) : '--.---',
-                kmNum: snapped.properties.location !== undefined ? snapped.properties.location : 0,
+                km: snapped.properties.location.toFixed(3),
+                kmNum: snapped.properties.location,
                 snappedCoords: snapped.geometry.coordinates,
                 lineKey: item.key
               };
             }
           });
-        } catch (err) {
-          console.warn("Errore elaborazione tracciato:", err);
-        }
+        } catch (err) {}
       });
-
-      return closestResult || { km: '--.---', kmNum: 0, snappedCoords: [userLon, userLat], lineKey: 'r16' };
+      return closestResult || { km: '--.---', kmNum: 0, lineKey: 'r16' };
     }
-
-    map.on('click', 'route-line', (e) => {
-      if (geojsonList.length === 0) return;
-
-      const clickLat = e.lngLat.lat;
-      const clickLon = e.lngLat.lng;
-
-      const result = getProgressivaKm(clickLat, clickLon, geojsonList);
-
-      if (popupTimer) clearTimeout(popupTimer);
-      if (currentClickPopup) currentClickPopup.remove();
-
-      currentClickPopup = new maplibregl.Popup({
-        className: 'custom-km-popup',
-        closeButton: false,
-        closeOnClick: false,
-        offset: 10
-      })
-        .setLngLat(result.snappedCoords)
-        .setHTML(`Km ${result.km}`)
-        .addTo(map);
-
-      popupTimer = setTimeout(() => {
-        if (currentClickPopup) {
-          currentClickPopup.remove();
-          currentClickPopup = null;
-        }
-      }, 5000);
-    });
-
-    map.on('mouseenter', 'route-line', () => { map.getCanvas().style.cursor = 'pointer'; });
-    map.on('mouseleave', 'route-line', () => { map.getCanvas().style.cursor = ''; });
 
     function onLocationFound(e) {
       const lat = e.coords.latitude;
       const lon = e.coords.longitude;
-      const heading = e.coords.heading;
-      const accuracy = e.coords.accuracy;
-
       userMarker.setLngLat([lon, lat]);
 
       if (geojsonList.length > 0) {
         const resultGps = getProgressivaKm(lat, lon, geojsonList);
         document.getElementById('km-text').innerText = `Km ${resultGps.km}`;
         
-        // Sincronizzazione automatica con la vista grafica del PDF
         if (resultGps.kmNum > 0) {
           syncPdfWithKm(resultGps.kmNum, resultGps.lineKey);
         }
       }
-      
-      if (accuracy !== undefined && accuracy !== null) {
-        document.getElementById('accuracy-text').innerText = `Accuratezza GPS: ±${Math.round(accuracy)} m`;
-        const circleFeature = turf.buffer(turf.point([lon, lat]), accuracy, { units: 'meters' });
-        if (map.getSource('gps-accuracy')) {
-          map.getSource('gps-accuracy').setData(circleFeature);
-        }
-      }
-
-      if (heading !== null && !isNaN(heading)) {
-        lastBearing = heading;
-      } else if (lastCoords) {
-        const dist = turf.distance(
-          turf.point([lastCoords.lon, lastCoords.lat]),
-          turf.point([lon, lat]),
-          { units: 'meters' }
-        );
-        if (dist > 2) {
-          lastBearing = turf.bearing(
-            turf.point([lastCoords.lon, lastCoords.lat]),
-            turf.point([lon, lat])
-          );
-        }
-      }
 
       if (followMode) {
-        map.easeTo({
-          center: [lon, lat],
-          bearing: lastBearing,
-          duration: 1000
-        });
-      }
-
-      lastCoords = { lat, lon };
-    }
-
-    function onLocationError(e) {
-      if (followMode && lastCoords) {
-        map.easeTo({
-          center: [lastCoords.lon, lastCoords.lat],
-          bearing: lastBearing,
-          duration: 1000
-        });
+        map.easeTo({ center: [lon, lat], duration: 1000 });
       }
     }
 
     if ('geolocation' in navigator) {
-      navigator.geolocation.watchPosition(onLocationFound, onLocationError, {
-        enableHighAccuracy: true,
-        maximumAge: 1000,
-        timeout: 10000
-      });
+      navigator.geolocation.watchPosition(onLocationFound, () => {}, { enableHighAccuracy: true });
     }
 
-    const lockBtn = document.getElementById('lock-btn');
-    lockBtn.addEventListener('click', () => {
+    document.getElementById('lock-btn').addEventListener('click', (e) => {
       followMode = !followMode;
-      if (followMode) {
-        lockBtn.classList.add('active');
-        lockBtn.innerText = '🧭 Mappa Orientata: ON';
-        if (lastCoords) {
-          map.easeTo({
-            center: [lastCoords.lon, lastCoords.lat],
-            bearing: lastBearing,
-            duration: 1000
-          });
-        }
-      } else {
-        lockBtn.classList.remove('active');
-        lockBtn.innerText = '🧭 Mappa Orientata: OFF';
-      }
-    });
-
-    const recenterBtn = document.getElementById('recenter-btn');
-    recenterBtn.addEventListener('click', () => {
-      if (lastCoords) {
-        map.flyTo({
-          center: [lastCoords.lon, lastCoords.lat],
-          bearing: lastBearing,
-          zoom: 15,
-          essential: true
-        });
-      }
+      e.target.classList.toggle('active', followMode);
+      e.target.innerText = followMode ? '🧭 Mappa Orientata: ON' : '🧭 Mappa Orientata: OFF';
     });
   </script>
 
