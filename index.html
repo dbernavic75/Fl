@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mappa GeoJSON & Fascicolo Linea PDF HD</title>
+  <title>Mappa GeoJSON & Fascicolo Linea PDF</title>
   
   <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
   
@@ -27,7 +27,6 @@
       top: 0;
       left: 0;
       z-index: 1;
-      transition: opacity 0.3s ease;
     }
 
     /* Display Chilometrica GPS (Sempre visibile in basso a sinistra) */
@@ -35,7 +34,7 @@
       position: absolute;
       bottom: 20px;
       left: 20px;
-      z-index: 20;
+      z-index: 30;
       background-color: rgba(255, 255, 255, 0.95);
       border: 2px solid #0066cc;
       border-radius: 8px;
@@ -62,18 +61,17 @@
       left: 0;
       width: 100vw;
       height: 100vh;
-      z-index: 15;
+      z-index: 25;
       background: #ffffff;
-      display: none; /* Nascosto di default (Stato 1: Mappa) */
+      display: none; /* Nascosto di default */
       flex-direction: column;
-      transition: background-color 0.3s ease, opacity 0.3s ease;
     }
 
     #pdf-header {
       background-color: #0066cc;
       color: #ffffff;
-      padding: 10px 16px;
-      font-size: 14px;
+      padding: 12px 16px;
+      font-size: 15px;
       font-weight: bold;
       display: flex;
       justify-content: space-between;
@@ -81,31 +79,26 @@
       box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
 
-    #detected-line-info {
-      font-size: 12px;
-      background: rgba(0, 0, 0, 0.2);
-      padding: 3px 8px;
-      border-radius: 4px;
-      font-family: monospace;
-    }
-
     #pdf-canvas-wrapper {
       position: relative;
       width: 100%;
-      height: calc(100vh - 45px);
+      height: calc(100vh - 50px);
       overflow-y: auto;
       overflow-x: hidden;
-      background: #f0f0f0;
+      background: #e0e0e0;
+      padding: 20px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
     }
 
-    #pdf-canvas {
+    .pdf-page-canvas {
       display: block;
-      margin: 0 auto;
-      width: 90% !important;
-      max-width: 900px;
-      height: auto !important;
       background: white;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+      max-width: 95%;
+      height: auto !important;
     }
 
     /* Pulsantiera di controllo in alto a destra */
@@ -113,7 +106,7 @@
       position: absolute;
       top: 10px;
       right: 10px;
-      z-index: 25;
+      z-index: 35;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -148,20 +141,18 @@
 
   <div id="map"></div>
 
-  <!-- Finestra PDF a Schermo Intero -->
+  <!-- Finestra PDF a Schermo Intero con Tutte le Pagine Scorribili -->
   <div id="pdf-viewer-container">
     <div id="pdf-header">
-      <div>
-        <span id="pdf-title-text">📄 Fascicolo Linea PDF (HD)</span>
-        <span id="pdf-page-num" style="font-size: 12px; margin-left: 10px;">Pag. --</span>
-      </div>
-      <div id="detected-line-info">Linea Rilevata: in attesa...</div>
+      <span id="pdf-title-text">📄 Fascicolo Linea PDF (Completo)</span>
+      <span id="pdf-pages-info" style="font-size: 13px;">Caricamento pagine...</span>
     </div>
     <div id="pdf-canvas-wrapper">
-      <canvas id="pdf-canvas"></canvas>
+      <!-- Le pagine del PDF verranno generate qui dinamicamente -->
     </div>
   </div>
 
+  <!-- Display Chilometrica GPS (Sempre attivo) -->
   <div id="display-km">
     <div id="km-text">Km --.---</div>
     <div id="accuracy-text" class="accuracy-info">Accuratezza GPS: -- m</div>
@@ -179,10 +170,8 @@
   <script>
     let geojsonList = [];
     let pdfDoc = null;
-    let pageTextData = []; 
-    let currentRenderedPage = null;
-    let isRendering = false;
-    let viewMode = 0; // 0 = Solo Mappa, 1 = PDF Schermo Intero, 2 = PDF con Mappa in Trasparenza
+    let isPdfRendered = false;
+    let viewMode = 0; // 0 = Solo Mappa, 1 = PDF Schermo Intero
 
     const map = new maplibregl.Map({
       container: 'map',
@@ -202,109 +191,49 @@
     let lastCoords = null;
     let currentClickPopup = null;
     let popupTimer = null;
-    let lastProcessedPage = null;
 
+    // Caricamento del file PDF ed elaborazione di tutte le pagine in sequenza
     pdfjsLib.getDocument('fl_fnm.pdf').promise.then(async function(pdfDoc_) {
       pdfDoc = pdfDoc_;
-      document.getElementById('pdf-title-text').innerText = "Fascicolo Linea (Pronto)";
-      await parsePDFStructure();
+      document.getElementById('pdf-title-text').innerText = "Fascicolo Linea Ufficiale";
+      document.getElementById('pdf-pages-info').innerText = `Totale pagine: ${pdfDoc.numPages}`;
+      console.log("PDF caricato. Pagine totali:", pdfDoc.numPages);
     }).catch(err => {
       console.error("Errore apertura PDF:", err);
+      document.getElementById('pdf-title-text').innerText = "Errore caricamento PDF";
     });
 
-    async function parsePDFStructure() {
-      pageTextData = [];
+    // Funzione per renderizzare tutte le pagine del PDF una sotto l'altra nel wrapper
+    async function renderAllPdfPages() {
+      if (!pdfDoc || isPdfRendered) return;
+      isPdfRendered = true;
+
+      const wrapper = document.getElementById('pdf-canvas-wrapper');
+      wrapper.innerHTML = ''; // Pulisce eventuali elementi precedenti
+
       for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
         const page = await pdfDoc.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const viewport = page.getViewport({ scale: 1.0 });
+        
+        const canvas = document.createElement('canvas');
+        canvas.className = 'pdf-page-canvas';
+        wrapper.appendChild(canvas);
 
-        let kmEntries = [];
-        let pageTitle = "";
-
-        textContent.items.forEach(item => {
-          let str = item.str.trim();
-          if (str.toLowerCase().includes("tronco") || str.toLowerCase().includes("tratta")) {
-            pageTitle += " " + str;
-          }
-          let match = str.match(/^(\d{1,3},\d{3})$/);
-          if (match) {
-            let kmVal = parseFloat(match[1].replace(',', '.'));
-            let originalY = item.transform[5];
-            let normalizedY = viewport.height - originalY;
-
-            kmEntries.push({
-              km: kmVal,
-              y: normalizedY,
-              viewportHeight: viewport.height
-            });
-          }
-        });
-
-        if (kmEntries.length > 0) {
-          kmEntries.sort((a, b) => a.km - b.km);
-          pageTextData.push({
-            pageNum: pageNum,
-            title: pageTitle.trim() || `Pagina ${pageNum}`,
-            minKm: kmEntries[0].km,
-            maxKm: kmEntries[kmEntries.length - 1].km,
-            entries: kmEntries
-          });
-        }
-      }
-    }
-
-    // Rendering HD della pagina PDF senza scorrimento automatico forzato
-    async function renderPdfPage(pageNum) {
-      if (!pdfDoc || isRendering) return;
-
-      const pageData = pageTextData.find(p => p.pageNum === pageNum);
-      if (!pageData) return;
-
-      if (currentRenderedPage !== pageNum) {
-        isRendering = true;
-        currentRenderedPage = pageNum;
-        document.getElementById('pdf-page-num').innerText = `Pag. ${pageNum}`;
-
-        const page = await pdfDoc.getPage(pageNum);
-        const containerWidth = document.getElementById('pdf-canvas-wrapper').clientWidth;
+        const containerWidth = wrapper.clientWidth * 0.9;
         const unscaledViewport = page.getViewport({ scale: 1.0 });
         
-        const renderScale = 2.5; 
-        const viewport = page.getViewport({ scale: renderScale });
+        // Risoluzione HD per una lettura nitida su PC e smartphone
+        const renderScale = 2.5;
+        const scale = (containerWidth / unscaledViewport.width) * renderScale;
+        const viewport = page.getViewport({ scale: scale });
 
-        const canvas = document.getElementById('pdf-canvas');
-        const context = canvas.getContext('2d');
-        
         canvas.height = viewport.height;
         canvas.width = viewport.width;
 
+        const context = canvas.getContext('2d');
         await page.render({
           canvasContext: context,
           viewport: viewport
         }).promise;
-
-        isRendering = false;
-      }
-    }
-
-    // Selezione della pagina corretta in base alla linea e progressiva (aggiorna i dati senza forzare il focus visivo)
-    function checkPdfPage(currentKm, lineKey) {
-      if (pageTextData.length === 0) return;
-
-      document.getElementById('detected-line-info').innerText = `Linea: ${lineKey.toUpperCase()} | Km: ${currentKm.toFixed(3)}`;
-
-      let bestPage = null;
-      for (let p of pageTextData) {
-        if (currentKm >= p.minKm - 0.5 && currentKm <= p.maxKm + 0.5) {
-          bestPage = p;
-          break;
-        }
-      }
-
-      if (bestPage && lastProcessedPage !== bestPage.pageNum) {
-        lastProcessedPage = bestPage.pageNum;
-        renderPdfPage(bestPage.pageNum);
       }
     }
 
@@ -363,21 +292,19 @@
       return closestResult || { km: '--.---', kmNum: 0, lineKey: 'r16' };
     }
 
+    // Il GPS continua a tracciare la progressiva reale in movimento in background
     function onLocationFound(e) {
       const lat = e.coords.latitude;
       const lon = e.coords.longitude;
       userMarker.setLngLat([lon, lat]);
+      lastCoords = { lat, lon };
 
       if (geojsonList.length > 0) {
         const resultGps = getProgressivaKm(lat, lon, geojsonList);
         document.getElementById('km-text').innerText = `Km ${resultGps.km}`;
-        
-        if (resultGps.kmNum > 0) {
-          checkPdfPage(resultGps.kmNum, resultGps.lineKey);
-        }
       }
 
-      if (followMode) {
+      if (followMode && viewMode === 0) {
         map.easeTo({ center: [lon, lat], duration: 1000 });
       }
     }
@@ -386,44 +313,40 @@
       navigator.geolocation.watchPosition(onLocationFound, () => {}, { enableHighAccuracy: true });
     }
 
-    // Gestione del pulsante a tre stati per la visualizzazione
+    // Gestione del pulsante di passaggio tra Mappa e Fascicolo Linea PDF
     const toggleViewBtn = document.getElementById('toggle-view-btn');
     const pdfContainer = document.getElementById('pdf-viewer-container');
-    const mapElement = document.getElementById('map');
+    const lockBtn = document.getElementById('lock-btn');
+    const recenterBtn = document.getElementById('recenter-btn');
 
     toggleViewBtn.addEventListener('click', () => {
-      viewMode = (viewMode + 1) % 3;
+      viewMode = viewMode === 0 ? 1 : 0;
 
       if (viewMode === 0) {
-        // Stato 0: Solo Mappa
+        // Modalità Mappa: mostra tutti i pulsanti e nasconde il PDF
         pdfContainer.style.display = 'none';
-        mapElement.style.opacity = '1';
+        lockBtn.style.display = 'block';
+        recenterBtn.style.display = 'block';
         toggleViewBtn.innerText = '📖 Mostra Fascicolo Linea';
-        toggleViewBtn.classList.remove('active');
-      } else if (viewMode === 1) {
-        // Stato 1: Fascicolo Linea a Schermo Intero (Mappa Nascosta)
+      } else {
+        // Modalità Fascicolo Linea: mostra schermo intero PDF e nasconde gli altri pulsanti
         pdfContainer.style.display = 'flex';
-        pdfContainer.style.backgroundColor = '#ffffff';
-        mapElement.style.opacity = '1';
-        toggleViewBtn.innerText = '🗺️ Fascicolo + Mappa (Trasp.)';
-        toggleViewBtn.classList.add('active');
-      } else if (viewMode === 2) {
-        // Stato 2: Fascicolo Linea in Primo Piano con Mappa in Sottofondo Trasparente
-        pdfContainer.style.display = 'flex';
-        pdfContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.85)'; // Sfondo semi-trasparente
-        mapElement.style.opacity = '0.3'; // Mappa visibile in trasparenza
-        toggleViewBtn.innerText = '🗺️ Solo Mappa';
-        toggleViewBtn.classList.remove('active');
+        lockBtn.style.display = 'none';
+        recenterBtn.style.display = 'none';
+        toggleViewBtn.innerText = '🗺️ Mostra Mappa';
+        
+        // Avvia il rendering completo di tutte le pagine se non è già stato fatto
+        renderAllPdfPages();
       }
     });
 
-    document.getElementById('lock-btn').addEventListener('click', (e) => {
+    lockBtn.addEventListener('click', (e) => {
       followMode = !followMode;
       e.target.classList.toggle('active', followMode);
       e.target.innerText = followMode ? '🧭 Mappa Orientata: ON' : '🧭 Mappa Orientata: OFF';
     });
 
-    document.getElementById('recenter-btn').addEventListener('click', () => {
+    recenterBtn.addEventListener('click', () => {
       if (lastCoords) {
         map.flyTo({ center: [lastCoords.lon, lastCoords.lat], zoom: 15, essential: true });
       }
