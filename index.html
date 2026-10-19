@@ -23,13 +23,19 @@
     #map {
       height: 100vh;
       width: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+      z-index: 1;
+      transition: opacity 0.3s ease;
     }
 
+    /* Display Chilometrica GPS (Sempre visibile in basso a sinistra) */
     #display-km {
       position: absolute;
       bottom: 20px;
       left: 20px;
-      z-index: 10;
+      z-index: 20;
       background-color: rgba(255, 255, 255, 0.95);
       border: 2px solid #0066cc;
       border-radius: 8px;
@@ -49,53 +55,44 @@
       font-weight: normal;
     }
 
-    /* Finestra PDF in Alta Definizione con Info Linea Rilevata */
+    /* Contenitore PDF a Schermo Intero */
     #pdf-viewer-container {
       position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 12;
-      width: 420px;
-      max-height: 520px;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 15;
       background: #ffffff;
-      border: 2px solid #0066cc;
-      border-radius: 10px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-      display: flex;
+      display: none; /* Nascosto di default (Stato 1: Mappa) */
       flex-direction: column;
-      overflow: hidden;
+      transition: background-color 0.3s ease, opacity 0.3s ease;
     }
 
     #pdf-header {
       background-color: #0066cc;
       color: #ffffff;
-      padding: 8px 12px;
-      font-size: 13px;
+      padding: 10px 16px;
+      font-size: 14px;
       font-weight: bold;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    #pdf-header-top {
       display: flex;
       justify-content: space-between;
       align-items: center;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     }
 
     #detected-line-info {
-      font-size: 11px;
+      font-size: 12px;
       background: rgba(0, 0, 0, 0.2);
-      padding: 2px 6px;
+      padding: 3px 8px;
       border-radius: 4px;
-      margin-top: 2px;
       font-family: monospace;
     }
 
     #pdf-canvas-wrapper {
       position: relative;
       width: 100%;
-      height: 400px;
+      height: calc(100vh - 45px);
       overflow-y: auto;
       overflow-x: hidden;
       background: #f0f0f0;
@@ -104,42 +101,19 @@
     #pdf-canvas {
       display: block;
       margin: 0 auto;
-      width: 100% !important;
+      width: 90% !important;
+      max-width: 900px;
       height: auto !important;
+      background: white;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
     }
 
-    #pdf-train-marker {
-      position: absolute;
-      left: 0;
-      right: 0;
-      height: 32px;
-      background-color: rgba(255, 0, 85, 0.3);
-      border-top: 2px solid #ff0055;
-      border-bottom: 2px solid #ff0055;
-      pointer-events: none;
-      transition: top 0.3s ease-in-out;
-      display: none;
-      z-index: 5;
-    }
-
-    #pdf-train-marker::before {
-      content: "🚂 POSIZIONE TRENO";
-      position: absolute;
-      right: 8px;
-      top: 5px;
-      font-size: 9px;
-      font-weight: bold;
-      color: #b3003b;
-      background: rgba(255, 255, 255, 0.95);
-      padding: 2px 5px;
-      border-radius: 3px;
-    }
-
+    /* Pulsantiera di controllo in alto a destra */
     .controls-container {
       position: absolute;
       top: 10px;
       right: 10px;
-      z-index: 10;
+      z-index: 25;
       display: flex;
       flex-direction: column;
       gap: 8px;
@@ -149,11 +123,11 @@
       background-color: #ffffff;
       border: 2px solid rgba(0,0,0,0.2);
       border-radius: 6px;
-      padding: 8px 12px;
+      padding: 10px 14px;
       cursor: pointer;
       font-weight: bold;
       font-size: 14px;
-      box-shadow: 0 1px 5px rgba(0,0,0,0.4);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.3);
     }
     .gps-btn.active {
       background-color: #0078FF;
@@ -174,16 +148,16 @@
 
   <div id="map"></div>
 
+  <!-- Finestra PDF a Schermo Intero -->
   <div id="pdf-viewer-container">
     <div id="pdf-header">
-      <div id="pdf-header-top">
+      <div>
         <span id="pdf-title-text">📄 Fascicolo Linea PDF (HD)</span>
-        <span id="pdf-page-num" style="font-size: 11px;">Pag. --</span>
+        <span id="pdf-page-num" style="font-size: 12px; margin-left: 10px;">Pag. --</span>
       </div>
       <div id="detected-line-info">Linea Rilevata: in attesa...</div>
     </div>
     <div id="pdf-canvas-wrapper">
-      <div id="pdf-train-marker"></div>
       <canvas id="pdf-canvas"></canvas>
     </div>
   </div>
@@ -194,6 +168,7 @@
   </div>
   
   <div class="controls-container">
+    <button id="toggle-view-btn" class="gps-btn">📖 Mostra Fascicolo Linea</button>
     <button id="lock-btn" class="gps-btn active">🧭 Mappa Orientata: ON</button>
     <button id="recenter-btn" class="gps-btn">🎯 Centra Posizione</button>
   </div>
@@ -207,6 +182,7 @@
     let pageTextData = []; 
     let currentRenderedPage = null;
     let isRendering = false;
+    let viewMode = 0; // 0 = Solo Mappa, 1 = PDF Schermo Intero, 2 = PDF con Mappa in Trasparenza
 
     const map = new maplibregl.Map({
       container: 'map',
@@ -226,6 +202,7 @@
     let lastCoords = null;
     let currentClickPopup = null;
     let popupTimer = null;
+    let lastProcessedPage = null;
 
     pdfjsLib.getDocument('fl_fnm.pdf').promise.then(async function(pdfDoc_) {
       pdfDoc = pdfDoc_;
@@ -235,7 +212,6 @@
       console.error("Errore apertura PDF:", err);
     });
 
-    // Analisi strutturale delle pagine e dei titoli nel PDF
     async function parsePDFStructure() {
       pageTextData = [];
       for (let pageNum = 1; pageNum <= pdfDoc.numPages; pageNum++) {
@@ -276,11 +252,10 @@
           });
         }
       }
-      console.log("Struttura PDF indicizzata:", pageTextData.length, "pagine valide trovate.");
     }
 
-    // Rendering HD con fattore di scala elevato per garantire massima nitidezza su PC e dispositivi mobili
-    async function renderPdfPageAndFocus(pageNum, targetKm) {
+    // Rendering HD della pagina PDF senza scorrimento automatico forzato
+    async function renderPdfPage(pageNum) {
       if (!pdfDoc || isRendering) return;
 
       const pageData = pageTextData.find(p => p.pageNum === pageNum);
@@ -295,7 +270,6 @@
         const containerWidth = document.getElementById('pdf-canvas-wrapper').clientWidth;
         const unscaledViewport = page.getViewport({ scale: 1.0 });
         
-        // Risoluzione interna alta (2.5x) per immagini vettoriali ultra-nitide su PC
         const renderScale = 2.5; 
         const viewport = page.getViewport({ scale: renderScale });
 
@@ -310,53 +284,16 @@
           viewport: viewport
         }).promise;
 
-        canvas.dataset.baseScale = renderScale;
-        canvas.dataset.unscaledWidth = unscaledViewport.width;
         isRendering = false;
-      }
-
-      const canvas = document.getElementById('pdf-canvas');
-      const baseScale = parseFloat(canvas.dataset.baseScale) || 2.5;
-      const unscaledWidth = parseFloat(canvas.dataset.unscaledWidth) || 600;
-      const currentContainerWidth = document.getElementById('pdf-canvas-wrapper').clientWidth;
-      const displayScale = currentContainerWidth / unscaledWidth;
-      const effectiveScale = baseScale * displayScale;
-
-      let entries = pageData.entries;
-      let matchedEntry = entries[0];
-
-      for (let i = 0; i < entries.length - 1; i++) {
-        if (targetKm >= entries[i].km && targetKm <= entries[i+1].km) {
-          let ratio = (targetKm - entries[i].km) / (entries[i+1].km - entries[i].km);
-          let interpolatedY = entries[i].y + ratio * (entries[i+1].y - entries[i].y);
-          matchedEntry = { y: interpolatedY };
-          break;
-        } else if (targetKm > entries[entries.length - 1].km) {
-          matchedEntry = entries[entries.length - 1];
-        }
-      }
-
-      if (matchedEntry) {
-        const marker = document.getElementById('pdf-train-marker');
-        const calculatedTop = (matchedEntry.y * (currentContainerWidth / unscaledWidth)) * baseScale - 16;
-        
-        marker.style.top = `${calculatedTop}px`;
-        marker.style.display = 'block';
-
-        const wrapper = document.getElementById('pdf-canvas-wrapper');
-        const scrollTarget = calculatedTop - (wrapper.clientHeight / 2) + 16;
-        wrapper.scrollTo({ top: Math.max(0, scrollTarget), behavior: 'smooth' });
       }
     }
 
-    // Selezione intelligente della pagina basata sulla linea attiva e sulla progressiva chilometrica reale
-    function syncPdfWithKm(currentKm, lineKey) {
+    // Selezione della pagina corretta in base alla linea e progressiva (aggiorna i dati senza forzare il focus visivo)
+    function checkPdfPage(currentKm, lineKey) {
       if (pageTextData.length === 0) return;
 
-      // Aggiorna il box informativo della linea rilevata
-      document.getElementById('detected-line-info').innerText = `Tracciato: ${lineKey.toUpperCase()} | Km: ${currentKm.toFixed(3)}`;
+      document.getElementById('detected-line-info').innerText = `Linea: ${lineKey.toUpperCase()} | Km: ${currentKm.toFixed(3)}`;
 
-      // Cerca la pagina che copre esattamente il chilometro attuale
       let bestPage = null;
       for (let p of pageTextData) {
         if (currentKm >= p.minKm - 0.5 && currentKm <= p.maxKm + 0.5) {
@@ -365,9 +302,9 @@
         }
       }
 
-      // Se trova una pagina corrispondente, la renderizza
-      if (bestPage) {
-        renderPdfPageAndFocus(bestPage.pageNum, currentKm);
+      if (bestPage && lastProcessedPage !== bestPage.pageNum) {
+        lastProcessedPage = bestPage.pageNum;
+        renderPdfPage(bestPage.pageNum);
       }
     }
 
@@ -436,7 +373,7 @@
         document.getElementById('km-text').innerText = `Km ${resultGps.km}`;
         
         if (resultGps.kmNum > 0) {
-          syncPdfWithKm(resultGps.kmNum, resultGps.lineKey);
+          checkPdfPage(resultGps.kmNum, resultGps.lineKey);
         }
       }
 
@@ -449,10 +386,47 @@
       navigator.geolocation.watchPosition(onLocationFound, () => {}, { enableHighAccuracy: true });
     }
 
+    // Gestione del pulsante a tre stati per la visualizzazione
+    const toggleViewBtn = document.getElementById('toggle-view-btn');
+    const pdfContainer = document.getElementById('pdf-viewer-container');
+    const mapElement = document.getElementById('map');
+
+    toggleViewBtn.addEventListener('click', () => {
+      viewMode = (viewMode + 1) % 3;
+
+      if (viewMode === 0) {
+        // Stato 0: Solo Mappa
+        pdfContainer.style.display = 'none';
+        mapElement.style.opacity = '1';
+        toggleViewBtn.innerText = '📖 Mostra Fascicolo Linea';
+        toggleViewBtn.classList.remove('active');
+      } else if (viewMode === 1) {
+        // Stato 1: Fascicolo Linea a Schermo Intero (Mappa Nascosta)
+        pdfContainer.style.display = 'flex';
+        pdfContainer.style.backgroundColor = '#ffffff';
+        mapElement.style.opacity = '1';
+        toggleViewBtn.innerText = '🗺️ Fascicolo + Mappa (Trasp.)';
+        toggleViewBtn.classList.add('active');
+      } else if (viewMode === 2) {
+        // Stato 2: Fascicolo Linea in Primo Piano con Mappa in Sottofondo Trasparente
+        pdfContainer.style.display = 'flex';
+        pdfContainer.style.backgroundColor = 'rgba(255, 255, 255, 0.85)'; // Sfondo semi-trasparente
+        mapElement.style.opacity = '0.3'; // Mappa visibile in trasparenza
+        toggleViewBtn.innerText = '🗺️ Solo Mappa';
+        toggleViewBtn.classList.remove('active');
+      }
+    });
+
     document.getElementById('lock-btn').addEventListener('click', (e) => {
       followMode = !followMode;
       e.target.classList.toggle('active', followMode);
       e.target.innerText = followMode ? '🧭 Mappa Orientata: ON' : '🧭 Mappa Orientata: OFF';
+    });
+
+    document.getElementById('recenter-btn').addEventListener('click', () => {
+      if (lastCoords) {
+        map.flyTo({ center: [lastCoords.lon, lastCoords.lat], zoom: 15, essential: true });
+      }
     });
   </script>
 
